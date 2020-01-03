@@ -1,0 +1,64 @@
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname ${BASH_SOURCE})/.."
+
+# File(s) that brittany can't currently handle b/c view patterns
+IGNORE_PATTERN='src/prosidy/Prosidy/Types.hs'
+
+msg ()  { printf -- '\e[1m----> %s\e[m\n' "$*" >&2; }
+warn () { printf -- '\e[33;1m----! %s\e[m\n' "$*" >&2; }
+err ()  { printf -- '\e[31;1m----! %s\e[m\n' "$*" >&2; exit 1; }
+
+#
+# Make sure that everything is staged to Git, so that bad formats can be
+# undone.
+#
+function ensure_staged
+{
+    local -a unstaged
+    unstaged=( $(git ls-files --modified '*.hs') )
+    if [ -n "${unstaged:-}" ]
+    then
+        warn 'Formatting will overwrite the contents of files.'
+        warn 'The following files have been modified but not staged.'
+        for path in "${unstaged[@]}"
+        do
+            echo "$path" >&2
+        done
+        err 'Please stage (git add) these files and try again.'
+    fi
+}
+ensure_staged
+
+#
+# Ensure that brittany is installed; if it isn't, install it via Cabal
+#
+function install_brittany
+{
+    [ -x bin/cabal/brittany ] || {
+        warn 'The command `brittany` was not found.'
+        msg 'Installing `brittany`: this may take a few minutes...'
+        cabal v2-install --verbose=0 --symlink-bindir="$PWD/bin/cabal" brittany
+    }
+}
+install_brittany
+
+#
+# Format Haskell files
+#
+function do_format
+{
+    local -a hsfiles
+    hsfiles=($(
+        IFS=$'\0'
+        git ls-files '*.hs' | grep -v "$IGNORE_PATTERN"
+    ))
+    [ -n "${hsfiles:-}" ] || {
+        err 'Didn'\''t find any Haskell sources.'
+    }
+    bin/cabal/brittany \
+        --no-user-config --config-file="$PWD/.brittany.yaml" \
+        --write-mode inplace \
+        "${hsfiles[@]}"
+}
+do_format

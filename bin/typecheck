@@ -1,0 +1,4 @@
+#!/bin/sh
+exec cabal v2-build --disable-optimization --flags '-fno-code' "${@:-all}"
+
+

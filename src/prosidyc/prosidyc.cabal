@@ -1,0 +1,30 @@
+cabal-version:         >=1.10
+name:                  prosidyc
+version:               0.1.0.0
+synopsis:              A small DSL for compiling Prosidy documents to other formats.
+license:               MPL-2.0
+license-file:          LICENSE
+author:                James Alexander Feldman-Crough
+maintainer:            alex@fldcr.com
+copyright:             Copyright 2020 to James Alexander Feldman-Crough
+category:              Language
+build-type:            Simple
+
+library
+  default-language:  Haskell2010
+  hs-source-dirs:    .
+  exposed-modules:   Prosidy.Compile
+  other-modules:     Prosidy.Compile.Internal.Error
+                   , Prosidy.Compile.Internal.Eval
+                   , Prosidy.Compile.Internal.Spec
+                   , Prosidy.Compile.Internal.Util
+  build-depends:     base >=4.7 && <5
+                   , prosidy
+                   , generic-lens >=1.1 && <1.2
+                   , hashable >=1.2 && <1.3
+                   , lens >=4.17 && <4.18
+                   , mtl >=2.2 && <2.3
+                   , text >=1.2 && <1.3
+                   , unordered-containers >=0.2 && <0.3
+                   , profunctors >=5.3 && <5.4
+                   , mmorph >=1.1 && <1.2
