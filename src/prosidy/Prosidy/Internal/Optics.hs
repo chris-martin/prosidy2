@@ -36,7 +36,8 @@ type Optic' p f s a = p a (f a) -> p s (f s)
 type Iso' s a = forall p f . Profunctor p => Functor f => Optic' p f s a
 type Lens' s a = forall p f . Strong p => Functor f => Optic' p f s a
 type Prism' s a = forall p f . Choice p => Applicative f => Optic' p f s a
-type Affine' s a = forall p f. Strong p => Choice p => Applicative f => Optic' p f s a
+type Affine' s a
+    = forall p f . Strong p => Choice p => Applicative f => Optic' p f s a
 type Traversal' s a = forall f . Applicative f => Optic' (->) f s a
 
 iso :: (s -> a) -> (a -> s) -> Iso' s a
@@ -46,7 +47,7 @@ iso get set = dimap get (fmap set)
 lens :: (s -> a) -> (s -> a -> s) -> Lens' s a
 lens get set = dimap into outof . second'
   where
-    into  x      = (x, get x)
+    into x = (x, get x)
     outof (x, f) = fmap (set x) f
 
 --set x <$> f (get x)
@@ -62,8 +63,8 @@ prism set get = dimap lhs rhs . right'
 affine :: (s -> Maybe a) -> (s -> a -> s) -> Affine' s a
 affine get set = dimap lhs rhs . right' . second'
   where
-    lhs x              = maybe (Left x) (Right . (x,)) $ get x
-    rhs (Left x)       = pure x
+    lhs x = maybe (Left x) (Right . (x, )) $ get x
+    rhs (Left  x     ) = pure x
     rhs (Right (x, f)) = set x <$> f
 {-# INLINE affine #-}
 

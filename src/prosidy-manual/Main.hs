@@ -22,21 +22,18 @@ import qualified System.IO                     as IO
 import qualified System.FilePath               as Path
 import qualified System.Directory              as Dir
 
-import Control.Monad.Except (throwError)
+import           Control.Monad.Except           ( throwError )
 
 main :: IO ()
 main = hakyll' $ do
     match "*.pro" $ do
         route (setExtension "html")
-        compile $
-            prosidyCompiler >>=
-                withItemBody compileDocumentIO
+        compile $ prosidyCompiler >>= withItemBody compileDocumentIO
 
 hakyll' :: Rules a -> IO ()
-hakyll' = hakyllWith $ defaultConfiguration
-    { providerDirectory = "./doc"
-    }
+hakyll' = hakyllWith $ defaultConfiguration { providerDirectory = "./doc" }
 
 compileDocumentIO :: Document -> Compiler LBS.ByteString
-compileDocumentIO = either (throwError . (:[]) . show) (pure . renderHtml) . compileDocument
+compileDocumentIO =
+    either (throwError . (: []) . show) (pure . renderHtml) . compileDocument
 
