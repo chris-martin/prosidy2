@@ -25,21 +25,21 @@ This repository hosts a few Prosidy-related projects:
 
 #-list:
   #-item:
-    #link[url='src/prosidy']{#lit{prosidy}}—
+    #link[url='/prosidy/tree/src/prosidy']{#lit{prosidy}}—
     Prosidy's reference parser
   #:
   #-item:
-    #link[url='src/prosidyc']{#lit{prosidyc}}—
+    #link[url='/prosidy/tree/src/prosidyc']{#lit{prosidyc}}—
     A Haskell DSL for writing Prosidy schemas and compiling them at the same
     time.
   #:
   #-item:
-    #link[url='src/prosidy-markup']{#lit{prosidy-markup}}—
+    #link[url='/prosidy/tree/src/prosidy-markup']{#lit{prosidy-markup}}—
     A Prosidy dialect targeting the same use cases as Markdown:
     quick, formatted plain text. (This README is written in it!)
   #:
   #-item:
-    #link[url='src/prosidy-manual']{#lit{prosidy-manual}}—
+    #link[url='/prosidy/tree/src/prosidy-manual']{#lit{prosidy-manual}}—
     Another Prosidy dialect currently being used to write the Prosidy manual.
   #:
 #:
