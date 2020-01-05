@@ -13,7 +13,6 @@ version:               0.1.0.0
 executable prosidy-markup
   hs-source-dirs:        .
   default-language:      Haskell2010
-  ghc-options:           -pgmL propp
   main-is:               Main.hs
   build-depends:         base >= 4.7 && < 5
                        , prosidy

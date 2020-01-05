@@ -42,6 +42,11 @@ This repository hosts a few Prosidy-related projects:
     #link[url='/prosidy/tree/src/prosidy-manual']{#lit{prosidy-manual}}—
     Another Prosidy dialect currently being used to write the Prosidy manual.
   #:
+  #-item:
+    #link[url='/prosidy/tree/src/poetic']{#lit{poetic}}—
+    A preprocessor for literate programming files. Works great with GHC if you
+    set #lit{-pgmL poetic}.
+  #:
 #:
 
 All of the code here is under #b{heavy} development;
