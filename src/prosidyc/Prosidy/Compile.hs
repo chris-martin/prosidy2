@@ -29,7 +29,6 @@ module Prosidy.Compile
     , opt
     , descend
     , embed
-    , contextualize
     , (@?)
     )
 where
@@ -45,6 +44,7 @@ import           Prosidy.Compile.Internal.Error ( Errors
                                                 , foldResult
                                                 , resultError
                                                 , liftResult
+                                                , eachError
                                                 )
 
 import           Prosidy.Types                  ( Key
@@ -67,6 +67,7 @@ import           Control.Monad.Trans            ( MonadTrans(..) )
 import           Data.Hashable                  ( Hashable )
 import           GHC.Generics                   ( Generic )
 import           Data.Functor.Identity          ( Identity(..) )
+import           Data.Profunctor                ( Profunctor(..) )
 import           Data.Text                      ( Text )
 import           Control.Monad.Fix              ( MonadFix )
 import           Data.Functor.Compose           ( Compose(..) )
@@ -101,6 +102,9 @@ data Item input context output = Item
     { itemMetadata :: ItemInfo
     , evalItem     :: input -> context (Result Eval.EvalError output)
     }
+
+instance MFunctor (Item item) where
+    hoist f (Item desc eval) = Item desc $ f . eval
 
 data Choice input context output = Choice
     { choiceMetadata :: ItemInfo
@@ -178,12 +182,16 @@ rule
     -> RuleT input context output
 rule name (Desc spec) = liftCompileM $ do
     (eval, Spec.SpecState props settings into) <-
-        foldResult (throwError . SpecError) pure $ Spec.specify spec
-    let key   = ItemKey name (Util.typeOf @input) (Util.typeOf @output)
+        foldResult
+                (throwError . SpecError . eachError (Spec.WrappedSpecError name)
+                )
+                pure
+            $ Spec.specify spec
+    let key   = ItemKey name
         pinfo = ProductInfo props settings into
         info  = ItemInfo key (Product pinfo)
     Util.setOnceFail (L.at key) (RuleConflict key) info
-    pure $ Item info (Eval.evaluate eval)
+    pure $ Item info (Eval.evaluate $ Eval.wrapEvalError name eval)
 
 choose
     :: forall input context output
@@ -192,14 +200,16 @@ choose
     -> [Choice input context output]
     -> RuleT input context output
 choose name choices = liftCompileM $ do
-    let key   = ItemKey name (Util.typeOf @input) (Util.typeOf @output)
+    let key   = ItemKey name
         sinfo = SumInfo $ fmap choiceMetadata choices
         info  = ItemInfo key (Sum sinfo)
     Util.setOnceFail (L.at key) (RuleConflict key) info
     pure . Item info $ \input ->
         case asum $ fmap (flip evalChoice input) choices of
             Just result -> result
-            Nothing     -> pure $ resultError Eval.NoMatches
+            Nothing ->
+                pure . resultError . Eval.WrappedEvalError name $ Eval.NoMatches
+                    (fmap (ruleName . ruleKey . choiceMetadata) choices)
 
 infix 3 @?
 (@?)
@@ -259,13 +269,6 @@ embed = Desc . pure . lift
 
 access :: Monad context => (input -> context a) -> Desc input context a
 access f = Desc . pure . Eval.evalM $ ask >>= lift . lift . lift . f
-
-contextualize
-    :: Monad context
-    => (forall x . context x -> context' x)
-    -> Item input context a
-    -> Item input context' a
-contextualize f (Item desc eval) = Item desc $ f . eval
 
 self :: Monad context => Desc input context input
 self = descM $ pure ask

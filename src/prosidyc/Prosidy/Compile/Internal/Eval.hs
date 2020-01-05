@@ -9,6 +9,7 @@ module Prosidy.Compile.Internal.Eval where
 import           Prosidy.Compile.Internal.Error ( Result
                                                 , ResultT(..)
                                                 , raiseError
+                                                , mapErrors
                                                 )
 import           Prosidy.Types                  ( Key
                                                 , HasMetadata
@@ -25,6 +26,7 @@ import           GHC.Generics                   ( Generic )
 import           Data.HashSet                   ( HashSet )
 import           Data.Text                      ( Text )
 import           Data.Generics.Product          ( field )
+import           Data.Bifunctor                 ( first )
 
 import qualified Control.Lens                  as L
 import           Control.Lens.Operators
@@ -48,6 +50,15 @@ data EvalState = EvalState
     }
   deriving (Generic)
 
+wrapEvalError
+    :: Functor context
+    => Text
+    -> Eval input context output
+    -> Eval input context output
+wrapEvalError name (Eval f) =
+    Eval $ \i st -> first (mapErrors (WrappedEvalError name)) <$> f i st
+
+
 seenProperties :: L.Lens' EvalState (HashSet Key)
 seenProperties = field @"_seenProperties"
 
@@ -58,7 +69,7 @@ seenSettings = field @"_seenSettings"
 data EvalError =
     ParseError Key String
   | MissingRequiredSetting Key
-  | NoMatches
+  | NoMatches [Text]
   | WrappedEvalError Text EvalError
   deriving (Eq, Generic, Show, Hashable)
 

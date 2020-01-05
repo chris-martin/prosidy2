@@ -18,6 +18,7 @@ module Prosidy.Compile.Internal.Error
     , resultM
     , foldResult
     , mapErrors
+    , eachError
     , MonadResult(..)
       -- * Re-exports
     , Hashable
@@ -196,6 +197,10 @@ resultM f r = ResultT $ do
         Fail es -> pure $ Fail es
         Ok   x  -> runResultT . lift . f $ pure x
 {-# INLINE resultM #-}
+
+eachError
+    :: (Hashable e, Hashable e', Eq e') => (e -> e') -> Errors e -> Errors e'
+eachError f (Errors es) = Errors $ HashSet.map f es
 
 mapErrors
     :: (Hashable e, Hashable e', Eq e')

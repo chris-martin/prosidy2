@@ -40,10 +40,8 @@ newtype Spec output = Spec
   deriving (Functor, Applicative, Monad)
     via (SpecM)
 
-data ItemKey = ItemKey
+newtype ItemKey = ItemKey
     { ruleName   :: Text
-    , inputType  :: SomeTypeRep
-    , outputType :: SomeTypeRep
     }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (Hashable)
@@ -60,6 +58,7 @@ data SpecError =
   | PropertyConflict Key PropertyInfo
   | SettingConflict Key SettingInfo
   | SubruleConflict ItemKey
+  | WrappedSpecError Text SpecError
   deriving stock (Eq, Generic, Show)
   deriving anyclass (Hashable)
 

@@ -26,11 +26,12 @@ import Prosidy
 import Prosidy.Compile
 import Prosidy.Manual.Monad
 
-import Data.Bifunctor   (Bifunctor(..))
-import Data.Text        (Text)
-import Text.Blaze.Html5 ((!))
-import Text.Read        (readEither)
-import Type.Reflection  (Typeable)
+import Data.Bifunctor      (Bifunctor(..))
+import Data.Text           (Text)
+import Text.Blaze.Html5    ((!))
+import Text.Read           (readEither)
+import Type.Reflection     (Typeable)
+import Control.Monad.Morph (MFunctor(hoist))
 
 import qualified Control.Lens                as L
 import qualified Data.Text                   as Text
@@ -125,7 +126,7 @@ With that out of the way, lets start defining custom elements for the manual.
 
         hTag <- embed headerTag
 
-        body  <- descend (contextualize nestSection block) $
+        body  <- descend (hoist nestSection block) $
             content . L.folded
 
         pure $ do

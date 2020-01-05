@@ -41,4 +41,5 @@ executable prosidy-manual
                        , directory
                        , filepath
                        , bytestring
+                       , mmorph
 
