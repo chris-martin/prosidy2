@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css?family=PT+Sans:400|PT+Serif:400,400i,700,700i&display=swap');
+
+html {
+    font: 16px/1.4 'PT Serif', Georgia, Times, 'Times New Roman', serif;
+}
+
+body {
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    max-width: 80ch;
+}
+
+section, aside {
+    margin: 2rem 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'PT Sans', Helvetica, Arial, sans-serif;
+    font-weight: normal;
+    margin: 0;
+    padding: 0;
+}
+
+a {
+    color: #0e60b2;
+}
+
+p {
+    margin: 1em 0;
+}
+
+aside {
+    box-sizing: border-box;
+    border-left: 2px solid black;
+    contain: layout;
+    padding: 0 1rem;
+    margin: 1rem 1rem 1rem 4rem;
+    min-height: 3rem;
+    position: relative;
+}
+
+aside::before {
+    content: ' ';
+    display: block;
+    height: 2rem;
+    left: -3rem;
+    margin-top: -1rem;
+    position: absolute;
+    top: 50%;
+    width: 2rem;
+
+    mask-size: contain;
+}
+
+aside.caution {
+    background-color: #eddfdf;
+    border-color: #a05151;
+}
+
+aside.caution::before {
+    background-color: #a05151;
+    mask-image: url('/res/alert.svg');
+}
+
+aside.wip {
+    background-color: #e7dfed;
+    border-color: #7e52a0;
+}
+
+aside.wip::before {
+    background-color: #7e52a0;
+    mask-image: url('/res/wip.svg');
+}
