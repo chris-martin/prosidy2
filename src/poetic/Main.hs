@@ -10,6 +10,7 @@ import qualified Data.Text.IO                  as Text.IO
 main :: IO ()
 main = do
     args <- getArgs
+
     let [_, input, output] = filter ((/= "-") . take 1) args
     doc <- readDocument input
     doc

@@ -30,6 +30,14 @@ main = hakyll' $ do
         route (setExtension "html")
         compile $ prosidyCompiler >>= withItemBody compileDocumentIO
 
+    match "res/*.css" $ do
+        route idRoute
+        compile compressCssCompiler
+
+    match "res/*.svg" $ do
+        route idRoute
+        compile copyFileCompiler
+
 hakyll' :: Rules a -> IO ()
 hakyll' = hakyllWith $ defaultConfiguration { providerDirectory = "./doc" }
 

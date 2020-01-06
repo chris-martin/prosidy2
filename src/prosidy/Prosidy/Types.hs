@@ -62,6 +62,7 @@ import Prosidy.Internal.JSON
 
 import Control.Monad (guard)
 import Data.Foldable (asum)
+import Data.Maybe (fromMaybe)
 import Data.Map.Strict (Map)
 import Data.Sequence (Seq)
 import Data.Set (Set)
@@ -69,6 +70,7 @@ import Data.Text (Text)
 import Data.Hashable (Hashable)
 import Data.Aeson (FromJSON(..), FromJSONKey(..), ToJSON(..), ToJSONKey(..))
 import Data.Aeson.Types (FromJSONKeyFunction(..))
+import Data.String (IsString(..))
 import Type.Reflection (Typeable)
 
 import qualified Data.Char as Char
@@ -193,6 +195,10 @@ instance FromJSONKey Key where
     fromJSONKey = FromJSONKeyTextParser $ \text ->
         maybe (fail "Invalid character in Key") pure $
             toKey text
+
+instance IsString Key where
+    fromString k =
+        fromMaybe (error $ "Invalid key: " <> k) .toKey $ Text.pack k
 
 pattern Key :: Text -> Key
 pattern Key text <- (keyName -> text)

@@ -8,7 +8,6 @@ updated: 2020-01-01T17:22-8000
 #=haskell:
 {-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE RecursiveDo       #-}
 {-# LANGUAGE TypeApplications  #-}
@@ -91,12 +90,17 @@ The Prosidy manual, however, is in English, which #i{does} want spaces in these 
 
 #=haskell:
     blockTag <- choose "block tag"
-        [ tagged [keyQ|section|] @? section
+        [ tagged "section" @? section
+        , tagged "note" @? note
         ]
 
     inlineTag <- choose "inline tag"
-        [ tagged [keyQ|b|] @? bold
-        , tagged [keyQ|i|] @? italics
+        [ tagged "b" @? bold
+        , tagged "i" @? italics
+        , tagged "lit" @? inlineLiteral
+        , tagged "def" @? definition
+        , tagged "ref" @? reference
+        , tagged "link" @? link
         ]
 #:
 
@@ -115,11 +119,50 @@ With that out of the way, lets start defining custom elements for the manual.
 #:
 
 #=haskell:
-    section <- rule @BlockTag @Manual @H.Html "section" $ do
-        sTitle <- reqText [keyQ|title|]
-            "The title of the section."
-        sSlug  <- optText [keyQ|slug|]
-            "The anchor tag associated with the section.\
+    inlineLiteral <- rule "inline literal" $ do
+        body <- descend inline $ content . L.folded
+        pure $ H.code body
+#:
+
+#=haskell:
+    note <- rule "note" $ do
+      level <- req readNote "level"
+        "The level of the note. Can be 'caution', 'note', or 'wip'"
+      body <- descend block $ content . L.folded
+      pure $ do
+        let levelHtml = case level of
+              Caution -> "caution"
+              Note    -> "note"
+              WIP     -> "wip"
+        H.aside ! A.class_ levelHtml $ do
+          body
+#:
+
+#=haskell:
+    link <- rule "link" $ do
+      url <- reqText "url" "The URL to link to."
+      external <- prop "external" "If provided, open links in a new window."
+      body <- descend inline $ content . L.folded
+      pure $ do
+        H.a ! A.href (H.toValue url)
+            ! (if external then A.target "blank" else mempty)
+            $ body
+#:
+
+#=haskell:
+    definition <- rule "term definition" $ do
+        body <- descend inline $ content . L.folded
+        pure $ H.dfn body
+
+    reference <- rule "term reference" $ do
+        body <- descend inline $ content . L.folded
+        pure $ H.a body
+#:
+
+#=haskell:
+    section <- rule "section" $ do
+        sTitle <- reqText "title" "The title of the section."
+        sSlug  <- optText "slug" "The anchor tag associated with the section.\
             \ If not provided, one will be generated based on the title.\
             \ Generally, providing a slug is better as it allows the section's\
             \ name to be changed without breaking permalinks."
@@ -133,6 +176,7 @@ With that out of the way, lets start defining custom elements for the manual.
             let title = H.text sTitle
             H.section $ do
                 H.h1 title
+                body
 #:
 
 #:
@@ -141,7 +185,7 @@ Finally, we wrap up all of the rules we previously defined into a final rule whi
 
 #=haskell:
     rule "manual page" $ do
-        title <- reqText [keyQ|title|] "The manual page's title."
+        title <- reqText "title" "The manual page's title."
         body  <- descend (block :: Item Block Manual H.Html) $
             content . L.folded
         pure $ do
@@ -150,10 +194,28 @@ Finally, we wrap up all of the rules we previously defined into a final rule whi
                 H.head $ do
                     H.meta ! A.charset "UTF-8"
                     H.title htmlTitle
+                    H.link ! A.rel   "stylesheet"
+                           ! A.type_ "text/css"
+                           ! A.href  "res/manual.css"
                 H.body $ do
                     H.header $ do
                         H.h1 htmlTitle
                     H.main body
+#:
+
+#=haskell:
+data NoteLevel = Caution | Note | WIP
+  deriving Show
+
+readNote :: Text -> Either String NoteLevel
+readNote "caution" = Right Caution
+readNote "note"    = Right Note
+readNote "wip"     = Right WIP
+readNote unknown   = Left $ mconcat
+  [ "Unknown note type: "
+  , show unknown
+  , ". Expected 'caution', 'note', or 'wip'"
+  ]
 #:
 
 #=haskell:

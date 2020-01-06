@@ -38,8 +38,9 @@ import qualified Data.Map.Strict               as Map
 import qualified Data.Sequence                 as Seq
 import qualified Data.List                     as List
 import qualified Data.Set                      as Set
-import qualified Data.Text.IO                  as Text.IO
+import qualified Data.Text.Encoding            as Text.Encoding
 import qualified Text.Megaparsec.Char          as Megaparsec
+import qualified Data.ByteString               as ByteString
 
 import           Data.Bifunctor                 ( first )
 import           Text.Megaparsec.Char.Lexer     ( hexadecimal )
@@ -68,8 +69,9 @@ parseDocument path = first Failure . parse doc path
 -- implementation.
 readDocument :: FilePath -> IO Document
 readDocument filepath = do
-    contents <- Text.IO.readFile filepath
-    either throwIO pure $ parseDocument filepath contents
+    bytes <- ByteString.readFile filepath
+    either throwIO pure . parseDocument filepath $
+        Text.Encoding.decodeUtf8 bytes
 
 -------------------------------------------------------------------------------
 -- | Parses a Prosidy document's header 'Metadata' from source, stopping when the
@@ -85,8 +87,9 @@ parseDocumentMetadata path = first Failure . parse docMetadata path
 -- implementation.
 readDocumentMetadata :: FilePath -> IO Metadata
 readDocumentMetadata filepath = do
-    contents <- Text.IO.readFile filepath
-    either throwIO pure $ parseDocumentMetadata filepath contents
+    bytes <- ByteString.readFile filepath
+    either throwIO pure . parseDocumentMetadata filepath $
+        Text.Encoding.decodeUtf8 bytes
 
 -------------------------------------------------------------------------------
 -- | A parsing error.
