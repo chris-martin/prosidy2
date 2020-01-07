@@ -1,0 +1,33 @@
+#!/bin/bash
+source "${BASH_SOURCE%/*}/lib/setup.sh"
+
+DESTINATION="${1:-${DESTINATION:-/net/srv/static/www/prosidy.org/}}"
+
+function make-compiler
+{
+    msg 'Building the `prosidy-manual` compiler (this may take a moment)'
+    cabal v2-install -v1 --symlink-bindir="$PWD/bin/cabal" exe:prosidy-manual
+}
+
+function compile-manual
+{
+    msg 'Compiling the contents of ./doc'
+    ./bin/cabal/prosidy-manual rebuild
+}
+
+function deploy-manual
+{
+    msg "Copying the compiled manual to $DESTINATION"
+    if [ -d "$DESTINATION" ]
+    then
+        rm -r "$DESTINATION"
+    elif [ ! -d "$(dirname "$DESTINATION")" ]
+    then
+        err "The parent directory of $DESTINATION does not exist."
+    fi
+    cp -RTv _site "$DESTINATION"
+}
+
+make-compiler
+compile-manual
+deploy-manual

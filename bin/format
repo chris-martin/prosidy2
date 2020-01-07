@@ -1,13 +1,9 @@
 #!/bin/bash
 set -euo pipefail
-cd "$(dirname ${BASH_SOURCE})/.."
+source "${BASH_SOURCE%/*}/lib/setup.sh"
 
 # File(s) that brittany can't currently handle b/c view patterns
 IGNORE_PATTERN='src/prosidy/Prosidy/Types.hs'
-
-msg ()  { printf -- '\e[1m----> %s\e[m\n' "$*" >&2; }
-warn () { printf -- '\e[33;1m----! %s\e[m\n' "$*" >&2; }
-err ()  { printf -- '\e[31;1m----! %s\e[m\n' "$*" >&2; exit 1; }
 
 #
 # Make sure that everything is staged to Git, so that bad formats can be
