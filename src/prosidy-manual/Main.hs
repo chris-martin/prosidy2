@@ -39,7 +39,9 @@ main = hakyll' $ do
         compile copyFileCompiler
 
 hakyll' :: Rules a -> IO ()
-hakyll' = hakyllWith $ defaultConfiguration { providerDirectory = "./doc" }
+hakyll' = hakyllWith $ defaultConfiguration
+    { providerDirectory = "./doc"
+    }
 
 compileDocumentIO :: Document -> Compiler LBS.ByteString
 compileDocumentIO =

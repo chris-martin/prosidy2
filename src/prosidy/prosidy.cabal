@@ -11,7 +11,7 @@ cabal-version:         >=1.10
 license:               MPL-2.0
 license-file:          LICENSE
 build-type:            Simple
-data-files:            test-data/golden/input/*, test-data/golden/output/*
+data-files:            test-data/golden/input/*.pro, test-data/golden/output/*.golden
 
 library
   default-language:    Haskell2010
