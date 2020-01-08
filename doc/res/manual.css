@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css?family=Playfair+Display:400,400i|Assistant:200,300,400,600,700,800&display=swap');
+@import url('https://fonts.googleapis.com/css?family=Fira+Code|Playfair+Display:400,400i|Assistant:400,400i,700,700i&display=swap');
 
 html {
     font: 18px/1.4 'Assistant', Helvetica, Arial, sans-serif;
@@ -11,9 +11,13 @@ body {
     box-sizing: border-box;
 
     display: grid;
+    grid-template-columns: 1fr 70ch 1fr;
     grid-template-rows: max-content auto min-content;
-    grid-template-columns: minmax(20ch, 1fr) 70ch 1fr;
     grid-column-gap: 2em;
+}
+
+body.toc {
+    grid-template-columns: minmax(20ch, 1fr) 70ch 1fr;
 }
 
 body > nav
@@ -117,16 +121,73 @@ section {
     margin: 2rem 0;
 }
 
+code {
+    background: #f4f4f4;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.9em;
+}
+
 aside {
-    border-left: 4px solid #2454C7;
-    padding: 0 0 0 0.5em;
-    margin: 1rem 0 1rem 2rem;
+    background-color: #eee;
+    border-left: 4px solid #333;
+    font-size: 0.85em;
+    padding: 1px 0.5em;
+    margin: 1rem 2rem 1rem calc(2rem + 64px);
+    position: relative;
+}
+
+aside::before {
+    content: "";
+    display: block;
+    background-size: contain;
+    background-position: center;
+    width: 48px;
+    height: 48px;
+    position: absolute;
+    top: 50%;
+    right: calc(100% + 16px);
+    margin-top: -24px;
+}
+
+aside p {
+    margin: 0.5em 0;
+}
+
+aside p:first-child {
+    font-weight: bold;
+}
+
+aside.note {
+    background-color: #d7dff4;
+    border-color: #2454C7;
+}
+
+aside.note::before {
+    background-image: url('info.svg');
+}
+
+aside.caution {
+    background-color: #f4d7d7;
+    border-color: #c62323;
+}
+
+aside.caution::before {
+    background-image: url('alert.svg');
+}
+
+aside.wip {
+    background-color: #f4f0d7;
+    border-color: #c6ae23;
+}
+
+aside.wip::before {
+    background-image: url('wip.svg');
 }
 
 /* footer */
 footer {
+    color: #444;
     font-size: 0.8em;
-    opacity: 0.5;
     text-align: center;
     padding: 2rem 0;
 }

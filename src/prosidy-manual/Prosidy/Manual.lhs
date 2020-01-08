@@ -213,9 +213,6 @@ Finally, we wrap up all of the rules we previously defined into a final rule whi
                 H.head $ do
                     H.meta ! A.charset "UTF-8"
                     H.title htmlTitle
-                    H.link ! A.rel "stylesheet"
-                           ! A.type_ "text/css"
-                           ! A.href "https://fonts.googleapis.com/css?family=PT+Serif:400,400i,700,700i&display=swap"
                     H.link ! A.rel   "stylesheet"
                            ! A.type_ "text/css"
                            ! A.href  "res/manual.css"
@@ -223,15 +220,18 @@ Finally, we wrap up all of the rules we previously defined into a final rule whi
                       H.link ! A.rel   "stylesheet"
                              ! A.type_ "text/css"
                              ! A.href  (H.toValue $ "res/" <> s <> ".css")
-                H.body $ do
+                H.body ! (if showToc then A.class_ "toc" else mempty) $ do
                     when showToc . H.nav $ do
                         compileToc toc
                     H.header . H.hgroup $ do
                         H.h1 htmlTitle
                         for_ subtitle $ H.h2 . H.text
                     H.main body
-                    H.footer "Copyright ©2020 to Prosidy.org.\
-                             \ All rights reserved."
+                    H.footer $ do
+                        H.div ! A.id "copyright" $ do
+                          "Copyright ©2020 to Prosidy.org. Available under the "
+                          H.a "MPL v2.0" ! A.href "https://www.mozilla.org/en-US/MPL/2.0/"
+                          " license."
 #:
 
 #=haskell:
