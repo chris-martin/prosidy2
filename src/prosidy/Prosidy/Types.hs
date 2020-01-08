@@ -55,6 +55,7 @@ module Prosidy.Types
     , _Break
     , _Paragraph
     , _Literal
+    , _Document
     ) where
 
 import Prosidy.Internal.Optics
@@ -143,6 +144,9 @@ instance HasMetadata Document where
         get (Document m _)   = m
         set (Document _ c) m = Document m c
     {-# INLINE metadata #-}
+
+_Document :: Iso' Document (Region (Seq Block))
+_Document = iso (\(Document m c) -> Region m c) (\(Region m c) -> Document m c)
 
 -------------------------------------------------------------------------------
 data Inline where

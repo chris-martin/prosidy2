@@ -21,6 +21,7 @@ executable prosidy-manual
 
   other-modules:         Prosidy.Manual
                        , Prosidy.Manual.Monad
+                       , Prosidy.Manual.TableOfContents
 
   build-tool-depends:    poetic:poetic
 
@@ -42,4 +43,5 @@ executable prosidy-manual
                        , filepath
                        , bytestring
                        , mmorph
+                       , binary
 

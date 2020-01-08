@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import           Prosidy                        ( readDocument )
-import           Prosidy.Manual                 ( compileDocument )
+import           Prosidy                        ( readDocument, content )
+import           Prosidy.Manual                 ( compileDocument, compileToc )
+import Prosidy.Manual.TableOfContents (calculateToc)
 import           Hakyll
 import           Hakyll.Contrib.Prosidy
 
@@ -24,11 +25,17 @@ import qualified System.Directory              as Dir
 
 import           Control.Monad.Except           ( throwError )
 
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Internal as Blaze
+import Data.Functor (($>))
+import qualified Control.Lens as L
+
 main :: IO ()
 main = hakyll' $ do
     match "*.pro" $ do
         route (setExtension "html")
-        compile $ prosidyCompiler >>= withItemBody compileDocumentIO
+        compile $
+            prosidyCompiler >>= compileDocumentIO
 
     match "res/*.css" $ do
         route idRoute
@@ -43,7 +50,15 @@ hakyll' = hakyllWith $ defaultConfiguration
     { providerDirectory = "./doc"
     }
 
-compileDocumentIO :: Document -> Compiler LBS.ByteString
-compileDocumentIO =
-    either (throwError . (: []) . show) (pure . renderHtml) . compileDocument
+compileDocumentIO :: Item Document -> Compiler (Item LBS.ByteString)
+compileDocumentIO item = do
+    saveSnapshot "tableOfContents" $ fmap calculateToc item
+    toc <- loadAllSnapshots "*.pro" "tableOfContents"
+    withItemBody (either (throwError . (:[]) . show) (pure . renderHtml) . compileDocument toc) item
+
+
+--     let doc = itemBody item
+--     contents <- saveSnapshot "TOC" $ item $> renderHtml (toc doc)
+--     allTOCs  <- foldMap (Blaze.unsafeLazyByteString . itemBody) <$> loadAllSnapshots "*.pro" "TOC"
+--     withItemBody (either (throwError . (: []) . show) (pure . renderHtml) . compileDocument (H.ol allTOCs)) item
 

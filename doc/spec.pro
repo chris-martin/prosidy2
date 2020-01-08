@@ -1,8 +1,9 @@
-title:      Prosidy specification
+title:      Language specification
 author:     James Alexander Feldman-Crough <alex@fldcr.com>
 created:    5 January, 2020
 updated:    5 January, 2020
 revision:   0.WIP
+toc
 ---
 
 Prosidy is a markup system designed around a simple and flexible syntax.
@@ -31,7 +32,7 @@ in a way that makes portability to other systems possible.
   #:
 #:
 
-#-section[title: 'Serializing and deserializing']:
+#-section[title: 'Serialization']:
   #-note[level: 'wip']:
     This section is currently not complete.
 

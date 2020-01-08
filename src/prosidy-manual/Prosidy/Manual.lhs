@@ -11,11 +11,13 @@ updated: 2020-01-01T17:22-8000
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE RecursiveDo       #-}
 {-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE TypeFamilies      #-}
 #:
 
 #=haskell[hide]:
 module Prosidy.Manual
     ( compileDocument
+    , compileToc
     , ManualError(..)
     ) where
 #:
@@ -24,13 +26,23 @@ module Prosidy.Manual
 import Prosidy
 import Prosidy.Compile
 import Prosidy.Manual.Monad
+import Prosidy.Manual.TableOfContents
 
+import Data.Functor (($>))
 import Data.Bifunctor      (Bifunctor(..))
 import Data.Text           (Text)
+import Data.Sequence       (Seq)
+import Data.Foldable       (for_, traverse_)
 import Text.Blaze.Html5    ((!))
 import Text.Read           (readEither)
 import Type.Reflection     (Typeable)
+import Control.Monad (unless, when)
 import Control.Monad.Morph (MFunctor(hoist))
+import Control.Lens.Operators
+import Data.Traversable (sequenceA)
+import System.FilePath((-<.>))
+
+import qualified Hakyll as Ha (Item, Identifier, toFilePath, itemIdentifier, itemBody)
 
 import qualified Control.Lens                as L
 import qualified Data.Text                   as Text
@@ -47,8 +59,8 @@ Our rules for parsing are all contained inside of the #lit{document} rule. Prosi
 Because rules are mutually recursive, we have to use #lit{MonadFix} for this to work! #lit{RecursiveDo} is a wonderful extension that provides from syntactic sugar for this.
 
 #=haskell:
-document :: Html Document
-document = mdo
+document :: [Ha.Item TocItem] -> Html Document
+document toc = mdo
 #:
 
 Let's start with the non-recursive rules.
@@ -90,17 +102,17 @@ The Prosidy manual, however, is in English, which #i{does} want spaces in these 
 
 #=haskell:
     blockTag <- choose "block tag"
-        [ tagged "section" @? section
-        , tagged "note" @? note
+        [ _Tagged "section" @? section
+        , _Tagged "note" @? note
         ]
 
     inlineTag <- choose "inline tag"
-        [ tagged "b" @? bold
-        , tagged "i" @? italics
-        , tagged "lit" @? inlineLiteral
-        , tagged "def" @? definition
-        , tagged "ref" @? reference
-        , tagged "link" @? link
+        [ _Tagged "b" @? bold
+        , _Tagged "i" @? italics
+        , _Tagged "lit" @? inlineLiteral
+        , _Tagged "def" @? definition
+        , _Tagged "ref" @? reference
+        , _Tagged "link" @? link
         ]
 #:
 
@@ -109,11 +121,11 @@ With that out of the way, lets start defining custom elements for the manual.
 #-section[title='Custom Markup']:
 
 #=haskell:
-    bold <- rule @InlineTag @Manual @H.Html "boldface" $ do
+    bold <- rule "boldface" $ do
         body <- descend inline $ content . L.folded
         pure $ H.strong body
 
-    italics <- rule @InlineTag @Manual @H.Html "italics" $ do
+    italics <- rule "italics" $ do
         body <- descend inline $ content . L.folded
         pure $ H.em body
 #:
@@ -186,21 +198,40 @@ Finally, we wrap up all of the rules we previously defined into a final rule whi
 #=haskell:
     rule "manual page" $ do
         title <- reqText "title" "The manual page's title."
-        body  <- descend (block :: Item Block Manual H.Html) $
-            content . L.folded
+        subtitle <- optText "subtitle" "The manual page's subtitle."
+        _ <- optText "nav-title" "Use this title in the navigation instead of title."
+        template <- optText "template"
+            "An optional name of a template to use.\
+            \ Activating a template will include extra CSS on the page,\
+            \ and in the future it may also modify the ruleset used\
+            \ to compile the document itself."
+        showToc <- prop "toc" "If provided, show the TOC on this page."
+        body  <- descend block $ content . L.folded
         pure $ do
             let htmlTitle = H.text title
             H.html $ do
                 H.head $ do
                     H.meta ! A.charset "UTF-8"
                     H.title htmlTitle
+                    H.link ! A.rel "stylesheet"
+                           ! A.type_ "text/css"
+                           ! A.href "https://fonts.googleapis.com/css?family=PT+Serif:400,400i,700,700i&display=swap"
                     H.link ! A.rel   "stylesheet"
                            ! A.type_ "text/css"
                            ! A.href  "res/manual.css"
+                    for_ template $ \s ->
+                      H.link ! A.rel   "stylesheet"
+                             ! A.type_ "text/css"
+                             ! A.href  (H.toValue $ "res/" <> s <> ".css")
                 H.body $ do
-                    H.header $ do
+                    when showToc . H.nav $ do
+                        compileToc toc
+                    H.header . H.hgroup $ do
                         H.h1 htmlTitle
+                        for_ subtitle $ H.h2 . H.text
                     H.main body
+                    H.footer "Copyright ©2020 to Prosidy.org.\
+                             \ All rights reserved."
 #:
 
 #=haskell:
@@ -219,14 +250,23 @@ readNote unknown   = Left $ mconcat
 #:
 
 #=haskell:
-compileDocument :: Document -> Either ManualError H.Html
-compileDocument doc =
-    runManual (compileM document doc) >>= first CompileError
+compileToc :: [Ha.Item TocItem] -> H.Html
+compileToc = H.ol . foldMap compileTocItem
 
-tagged :: Key -> L.Prism' (Tagged a) (Tagged a)
-tagged name = L.prism' id (\t -> if L.has (tag . L.only name) t
-                                    then Just t
-                                    else Nothing)
+compileTocItem :: Ha.Item TocItem -> H.Html
+compileTocItem item = H.li $ do
+  let TocItem title slug children = Ha.itemBody item
+      itemPath                    = Ha.toFilePath (Ha.itemIdentifier item) -<.> "html"
+      itemUrl                     = Text.pack itemPath <> "#" <> slug
+  H.a (H.text title) ! A.href (H.toValue itemUrl)
+  unless (null children) $
+    H.ol (foldMap compileTocItem $ fmap (item $>) children)
+#:
+
+#=haskell:
+compileDocument :: [Ha.Item TocItem] -> Document -> Either ManualError H.Html
+compileDocument toc doc =
+    runManual (compileM (document toc) doc) >>= first CompileError
 
 reqAuto
     :: (Typeable output, Read output, HasMetadata input, Monad context)

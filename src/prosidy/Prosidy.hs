@@ -1,6 +1,4 @@
-module Prosidy
-    ( module X
-    )
+module Prosidy ( module X)
 where
 
 import           Prosidy.Types                 as X
