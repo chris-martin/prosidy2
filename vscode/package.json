@@ -1,0 +1,29 @@
+{
+    "name": "prosidy-syntax",
+    "displayName": "Prosidy Syntax",
+    "description": "Syntax highlighting for Prosidy files.",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.41.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "prosidy",
+            "aliases": ["Prosidy", "prosidy"],
+            "extensions": [".pro"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "prosidy",
+            "scopeName": "source.prosidy",
+            "path": "./syntaxes/prosidy.tmLanguage.json"
+        }],
+        "keybindings": [{
+            "key": "cmd+shift+i",
+            "command": "editor.action.inspectTMScopes"
+        }]
+    }
+}

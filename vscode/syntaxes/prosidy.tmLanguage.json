@@ -1,0 +1,186 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Prosidy",
+    "patterns": [
+        {
+            "name": "meta.header.prosidy",
+            "begin": "\\A",
+            "end": "^(---)\\s*$",
+            "endCaptures": {
+                "1": { "name": "markup.heading.prosidy" }
+            },
+            "patterns": [
+                {"include": "#comment"},
+                {"include": "#header-metadata"}
+            ]
+        },
+        { "include": "#block-tag" },
+        { "include": "#literal-tag" },
+        { "include": "#paragraph" },
+        { "include": "#invalid" }
+    ],
+    "repository": {
+        "assign": {
+            "match": "[:=]",
+            "name":"keyword.operator.assign.prosidy"
+        },
+        "block-body": {
+            "begin": "(:)([_[:alnum:]][^[:space:]\\\\#{}\\[\\]:=,]*)?",
+            "end": "^\\s*(#:\\2)",
+            "beginCaptures": {
+                "1": {"name":"keyword.control.open.prosidy"},
+                "2": {"name":"keyword.control.open.prosidy"}
+            },
+            "endCaptures": {
+                "1": {"name":"keyword.control.close.prosidy"}
+            },
+            "name": "meta.tag.block.body.prosidy",
+            "patterns": [
+                { "include": "#block-tag" },
+                { "include": "#literal-tag" },
+                { "include": "#invalid" },
+                { "include": "#paragraph" }
+            ]
+        },
+        "block-tag": {
+            "begin": "^\\s*(#-)([_[:alnum:]][^[:space:]\\\\#{}\\[\\]:=,]*)",
+            "end": "(?=\n)",
+            "beginCaptures": {
+                "1": {"name": "keyword.control.sigil.prosidy"},
+                "2": {"name":"entity.name.tag.prosidy"}
+            },
+            "patterns": [
+                {"include": "#metadata"},
+                {"include": "#block-body"},
+                {"include": "#inline-body"}
+            ],
+            "name": "meta.tag.block.prosidy"
+        },
+        "comment": {
+            "match": "##.*$",
+            "name": "comment.line.prosidy"
+        },
+        "escape": {
+            "match": "\\\\(?:[ntr#{}\\[\\]:='\"\\\\]|u[A-Fa-f0-9]*)",
+            "name": "constant.character.escape.prosidy"
+        },
+        "key": {
+            "match": "[_[:alnum:]][^[:space:]\\\\#{}\\[\\]:=,]*",
+            "name": "entity.other.attribute-name"
+        },
+        "header-metadata": {
+            "name": "meta.header.item.prosidy",
+            "match": "^\\s*([_[:alnum:]][^[:space:]\\\\#{}\\[\\]:=,]*)\\s*(?:([:=])\\s*(.*))?$",
+            "captures": {
+                "1": {
+                    "name": "entity.other.attribute-name"
+                },
+                "2": {
+                    "name": "keyword.operator.assign.prosidy"
+                },
+                "3": {
+                    "name":"string.unquoted",
+                    "patterns": [
+                        {"include": "#comment"},
+                        {"include": "#escape"}
+                    ]
+                }
+            }
+        },
+        "inline-body": {
+            "begin": "(\\{)",
+            "end": "(\\})",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.open.prosidy" }
+            },
+            "endCaptures": {
+                "1": { "name": "keyword.control.close.prosidy" }
+            },
+            "patterns": [
+                {"include": "#inline-tag"},
+                {"include": "#comment"},
+                {"include": "#escape"}
+            ]
+        },
+        "inline-tag": {
+            "begin": "(#)([_[:alnum:]][^[:space:]\\\\#{}\\[\\]:=,]*)",
+            "end": "(?=}\\s|#|$)",
+            "beginCaptures": {
+                "1": {"name": "keyword.control.sigil.prosidy"},
+                "2": {"name":"entity.name.tag.prosidy"}
+            },
+            "patterns": [
+                {"include": "#metadata"},
+                {"include": "#inline-body"}
+            ],
+            "name": "meta.tag.inline.prosidy"
+        },
+        "invalid": {
+            "name": "invalid.illegal",
+            "match": "#"
+        },
+        "literal-tag": {
+            "begin": "^\\s*(#=)([_[:alnum:]][^[:space:]\\\\#{}\\[\\]:=,]*)",
+            "end": "(?=\n)",
+            "beginCaptures": {
+                "1": {"name": "keyword.control.sigil.prosidy"},
+                "2": {"name":"entity.name.tag.prosidy"}
+            },
+            "patterns": [
+                {"include": "#metadata"},
+                {"include": "#literal-body"}
+            ],
+            "name": "meta.tag.literal.prosidy"
+        },
+        "literal-body": {
+            "begin": "(:)([_[:alnum:]][^[:space:]\\\\#{}\\[\\]:=,]*)?",
+            "end": "^\\s*(#:\\2)",
+            "beginCaptures": {
+                "1": {"name":"keyword.control.open.prosidy"},
+                "2": {"name":"keyword.control.open.prosidy"}
+            },
+            "endCaptures": {
+                "1": {"name":"keyword.control.close.prosidy"}
+            },
+            "name": "meta.tag.literal.body.prosidy",
+            "contentName": "string.literal.prosidy"
+        },
+        "metadata": {
+            "name": "meta.metadata.prosidy",
+            "begin": "\\G(\\[)",
+            "end": "(\\])",
+            "captures": {
+                "1": { "name":"keyword.control.delimiter.prosidy" }
+            },
+            "patterns": [
+                {"include": "#assign"},
+                {"include": "#key"},
+                {"include": "#separator"},
+                {"include": "#value"}
+            ]
+        },
+        "paragraph": {
+            "begin": "^\\s*+(?!#[=:#-])(?=.)",
+            "end": "(?=\n)",
+            "name": "meta.paragraph.prosidy",
+            "patterns": [
+                {"include": "#inline-tag"},
+                {"include": "#comment"},
+                {"include": "#escape"}
+            ]
+        },
+        "separator": {
+            "match": ",",
+            "name": "punctuation.separator.comma.prosidy"
+        },
+        "value": {
+            "name": "string.quoted.prosidy",
+            "begin": "([\"'])",
+            "end": "\\1",
+            "patterns": [
+                {"include": "#escape"}
+            ]
+        }
+    },
+    "scopeName": "source.prosidy"
+}
