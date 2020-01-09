@@ -1,0 +1,12 @@
+{
+    "files.exclude": {
+        "_cache/**": true,
+        "_site/**": true,
+        "dist/**": true,
+        "dist-newstyle": true,
+        ".envrc": true,
+        ".ghc.environment.*": true,
+        ".gitattributes": true,
+        ".brittany.yaml": true
+    }
+}
