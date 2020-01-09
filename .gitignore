@@ -1,4 +1,6 @@
 .stack-work/
+.done/
+bin/
 dist/
 dist-newstyle/
 /cabal.project.local

@@ -2,7 +2,9 @@
     "files.exclude": {
         "_cache/**": true,
         "_site/**": true,
+        "bin/**": true,
         "dist/**": true,
+        ".done/**": true,
         "dist-newstyle": true,
         ".envrc": true,
         ".ghc.environment.*": true,

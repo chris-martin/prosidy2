@@ -27,19 +27,6 @@ function ensure_staged
 ensure_staged
 
 #
-# Ensure that brittany is installed; if it isn't, install it via Cabal
-#
-function install_brittany
-{
-    [ -x bin/cabal/brittany ] || {
-        warn 'The command `brittany` was not found.'
-        msg 'Installing `brittany`: this may take a few minutes...'
-        cabal v2-install --verbose=0 --symlink-bindir="$PWD/bin/cabal" brittany
-    }
-}
-install_brittany
-
-#
 # Format Haskell files
 #
 function do_format
@@ -52,7 +39,7 @@ function do_format
     [ -n "${hsfiles:-}" ] || {
         err 'Didn'\''t find any Haskell sources.'
     }
-    bin/cabal/brittany \
+    brittany \
         --no-user-config --config-file="$PWD/.brittany.yaml" \
         --write-mode inplace \
         "${hsfiles[@]}"

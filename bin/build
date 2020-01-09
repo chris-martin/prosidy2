@@ -1,2 +1,0 @@
-#!/bin/sh
-exec cabal v2-build "${@:-all}"
