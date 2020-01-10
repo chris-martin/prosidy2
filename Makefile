@@ -5,6 +5,8 @@ HASKELL_SOURCES := $(shell find src/ -type f -name '*.hs' -or -name '*.lhs')
 MANUAL_SOURCES  := $(shell find ./doc/ -type f)
 MANUAL_OUTPUTS  := $(foreach src,$(MANUAL_SOURCES),$(subst ./doc/,./_site/,$(subst .pro,.html,$(src))))
 
+CABAL_INSTALL ?= cabal v2-install --installdir=bin --overwrite-policy=always
+
 #
 # PHONY RULES
 #
@@ -29,10 +31,10 @@ manual: $(MANUAL_OUTPUTS)
 bin/prosidy-manual bin/prosidy-markup: .done/haskell
 
 bin/brittany:
-	cabal v2-install --installdir=bin brittany
+	$(CABAL_INSTALL) brittany
 
 .done/haskell: $(HASKELL_SOURCES)
-	cabal v2-install --installdir=bin exe:prosidy-manual exe:prosidy-markup
+	$(CABAL_INSTALL) exe:prosidy-manual exe:prosidy-markup
 	@mkdir -p .done && touch $@
 
 #
