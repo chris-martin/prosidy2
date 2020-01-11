@@ -20,10 +20,6 @@
             "language": "prosidy",
             "scopeName": "source.prosidy",
             "path": "./syntaxes/prosidy.tmLanguage.json"
-        }],
-        "keybindings": [{
-            "key": "cmd+shift+i",
-            "command": "editor.action.inspectTMScopes"
         }]
     }
 }
