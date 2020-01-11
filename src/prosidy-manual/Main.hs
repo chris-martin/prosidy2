@@ -26,7 +26,6 @@ import qualified System.Directory              as Dir
 
 import Data.Traversable (sequenceA)
 import Data.Maybe (mapMaybe)
-import Data.Functor (($>))
 import           Control.Monad (unless, void)
 import           Control.Monad.Except           ( throwError )
 
@@ -71,7 +70,7 @@ compileDocumentIO item = do
     compiledTOC :: Item (Maybe TocItem)
     compiledTOC
         | itemBody item ^. property "hide" = item $> Nothing
-        | otherwise                        = fmap (Just . calculateToc) item
+        | otherwise                        = fmap (Just . calculateToc 2) item
 
 tablesOfContent :: Compiler [Item TocItem]
 tablesOfContent = do

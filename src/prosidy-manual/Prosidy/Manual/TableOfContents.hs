@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 module Prosidy.Manual.TableOfContents where
 
 import Prosidy.Types
@@ -15,6 +16,7 @@ import qualified Data.Char as Char
 import Data.Maybe (fromMaybe)
 import Data.Binary (Binary(..))
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Numeric.Natural (Natural)
 
 data TocItem = TocItem
     { tocTitle    :: Text
@@ -34,17 +36,18 @@ instance Binary TocItem where
         put $ encodeUtf8 s
         put xs
 
-calculateToc :: Document -> TocItem
-calculateToc = toTocItem . L.view _Document
+calculateToc :: Natural -> Document -> TocItem
+calculateToc depth = toTocItem depth . L.view _Document
 
-foldToc :: L.Fold (Region (Seq Block)) TocItem
-foldToc = content . L.folded . allSections . L.to toTocItem
+foldToc :: Natural -> L.Fold (Region (Seq Block)) TocItem
+foldToc 0 = const pure
+foldToc depth = content . L.folded . allSections . L.to (toTocItem depth)
   where
     allSections :: L.Fold Block (Region (Seq Block))
     allSections = L.deepOf (_BlockTag . content . L.folded) (_BlockTag . _Tagged "section")
 
-toTocItem :: Region (Seq Block) -> TocItem
-toTocItem r = TocItem navTitle slug $ r ^.. foldToc
+toTocItem :: Natural -> Region (Seq Block) -> TocItem
+toTocItem depth r = TocItem navTitle slug $ r ^.. foldToc (pred depth)
   where
     realTitle = fromMaybe "UNTITLED" $ r ^. setting "title"
     navTitle  = fromMaybe realTitle  $ r ^. setting "nav-title"
