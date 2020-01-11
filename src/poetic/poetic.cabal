@@ -18,3 +18,5 @@ executable poetic
                      , prosidy
                      , lens >=4.17 && <4.18
                      , text >=1.2 && <1.3
+                     , optparse-applicative >= 0.14 && < 0.16
+                     , unordered-containers >= 0.2 && < 0.3
