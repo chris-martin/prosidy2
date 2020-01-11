@@ -9,28 +9,6 @@ body {
     margin: 0;
     padding: 1rem;
     box-sizing: border-box;
-
-    display: grid;
-    grid-template-columns: 1fr 70ch 1fr;
-    grid-template-rows: max-content auto min-content;
-    grid-column-gap: 2em;
-}
-
-body.toc {
-    grid-template-columns: minmax(20ch, 1fr) 70ch 1fr;
-}
-
-body > nav
-{
-    grid-column: 1;
-    grid-row: 2 / 3;
-}
-
-body > header,
-body > main,
-body > footer
-{
-    grid-column: 2;
 }
 
 a {
@@ -55,7 +33,6 @@ header {
 }
 
 header > hgroup > h1 {
-    font-size: 4rem;
     font-weight: normal;
     margin: 0 0 0.5rem;
 }
@@ -72,20 +49,21 @@ header > hgroup > h2 {
 
 nav {
     font-size: 0.8em;
-    flex-basis: 80ch;
-    text-align: right;
     position: relative;
-    opacity: 0.6;
-    transition: 0.2s opacity;
-}
-
-nav:hover {
-    opacity: 1;
 }
 
 nav a {
     color: inherit;
     text-decoration: none;
+    display: inline-block;
+    position: relative;
+}
+
+nav .current a.viewing:after {
+    content: "◃";
+    display: inline-block;
+    padding-left: 2px;
+    position: absolute;
 }
 
 nav a:hover {
@@ -98,7 +76,6 @@ nav li
     margin: 0;
     padding: 0;
     list-style: none;
-    position: sticky;
     top: 0;
 }
 
@@ -132,21 +109,9 @@ aside {
     border-left: 4px solid #333;
     font-size: 0.85em;
     padding: 1px 0.5em;
-    margin: 1rem 2rem 1rem calc(2rem + 64px);
+    margin: 1rem;
     position: relative;
-}
-
-aside::before {
-    content: "";
-    display: block;
-    background-size: contain;
-    background-position: center;
-    width: 48px;
-    height: 48px;
-    position: absolute;
-    top: 50%;
-    right: calc(100% + 16px);
-    margin-top: -24px;
+    clear: both;
 }
 
 aside p {
@@ -188,6 +153,88 @@ aside.wip::before {
 footer {
     color: #444;
     font-size: 0.8em;
+
     text-align: center;
     padding: 2rem 0;
+}
+
+/* Special rules for tiny views */
+@media screen and (max-width: 70ch) {
+    nav {
+        background-color: #f8f8f8;
+        border: 1px solid #ddd;
+        padding: 1rem 1rem 1px 1rem;
+        margin: 1rem 0;
+    }
+}
+
+/* Special rules for small views */
+@media screen and (max-width: 70ch) and (min-width: 40ch) {
+    nav {
+        float: right;
+        margin: 0 0 1rem 1rem;
+        width: 25ch;
+    }
+}
+
+/* Special rules for big views */
+@media screen and (min-width: 70ch) {
+    body {
+        display: grid;
+        grid-template-columns: 1fr minmax(45ch, 70ch) 1fr;
+        grid-template-rows: max-content auto min-content;
+        grid-column-gap: 2ch;
+    }
+
+    header > hgroup > h1 {
+        font-size: 4rem;
+    }
+    
+    body.toc {
+        grid-template-columns: minmax(15ch, 1fr) minmax(45ch, 70ch) 1fr;
+    }
+    
+    body > nav
+    {
+        grid-column: 1;
+        grid-row: 2 / 3;
+    }
+    
+    body > header,
+    body > main,
+    body > footer
+    {
+        grid-column: 2;
+    }
+
+    aside {
+        margin-left: calc(2rem + 64px);
+    }
+
+    aside::before {
+        content: "";
+        display: block;
+        background-size: contain;
+        background-position: center;
+        width: 48px;
+        height: 48px;
+        position: absolute;
+        top: 50%;
+        right: calc(100% + 16px);
+        margin-top: -24px;
+    }
+
+    nav {
+        text-align: right;
+        opacity: 0.6;
+        transition: 0.2s opacity;
+    }
+
+    nav:hover {
+        opacity: 1;
+    }
+
+    nav > ol, nav > ul {
+        position: sticky;
+    }
 }

@@ -1,6 +1,6 @@
 title:     Prosidy
-subtitle:  A minimal language for writing.
 nav-title: Home ## Display a different title in the navigation
+subtitle:  A minimal language for writing.
 ---
 
 Prosidy is a small language for writing documents in plain text.

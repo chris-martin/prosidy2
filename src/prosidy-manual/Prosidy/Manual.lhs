@@ -41,6 +41,7 @@ import Control.Monad.Morph (MFunctor(hoist))
 import Control.Lens.Operators
 import Data.Traversable (sequenceA)
 import System.FilePath((-<.>))
+import Data.Maybe (fromMaybe)
 
 import qualified Hakyll as Ha (Item, Identifier, toFilePath, itemIdentifier, itemBody)
 
@@ -59,8 +60,8 @@ Our rules for parsing are all contained inside of the #lit{document} rule. Prosi
 Because rules are mutually recursive, we have to use #lit{MonadFix} for this to work! #lit{RecursiveDo} is a wonderful extension that provides from syntactic sugar for this.
 
 #=haskell:
-document :: [Ha.Item TocItem] -> Html Document
-document toc = mdo
+document :: FilePath -> [Ha.Item TocItem] -> Html Document
+document currentPath toc = mdo
 #:
 
 Let's start with the non-recursive rules.
@@ -186,7 +187,8 @@ With that out of the way, lets start defining custom elements for the manual.
 
         pure $ do
             let title = H.text sTitle
-            H.section $ do
+            let slug  = fromMaybe (toSlug sTitle) sSlug
+            H.section ! A.id (H.toValue slug) $ do
                 H.h1 title
                 body
 #:
@@ -200,6 +202,7 @@ Finally, we wrap up all of the rules we previously defined into a final rule whi
         title <- reqText "title" "The manual page's title."
         subtitle <- optText "subtitle" "The manual page's subtitle."
         _ <- optText "nav-title" "Use this title in the navigation instead of title."
+        _ <- prop "hide" "Do not include in the table-of-contents if specified."
         template <- optText "template"
             "An optional name of a template to use.\
             \ Activating a template will include extra CSS on the page,\
@@ -212,20 +215,23 @@ Finally, we wrap up all of the rules we previously defined into a final rule whi
             H.html $ do
                 H.head $ do
                     H.meta ! A.charset "UTF-8"
+                    H.meta ! A.name "viewport"
+                           ! A.content "width=device-width, initial-scale=1"
                     H.title htmlTitle
                     H.link ! A.rel   "stylesheet"
                            ! A.type_ "text/css"
                            ! A.href  "res/manual.css"
+                    H.script mempty ! A.src "res/manual.js"
                     for_ template $ \s ->
                       H.link ! A.rel   "stylesheet"
                              ! A.type_ "text/css"
                              ! A.href  (H.toValue $ "res/" <> s <> ".css")
                 H.body ! (if showToc then A.class_ "toc" else mempty) $ do
-                    when showToc . H.nav $ do
-                        compileToc toc
                     H.header . H.hgroup $ do
                         H.h1 htmlTitle
                         for_ subtitle $ H.h2 . H.text
+                    when showToc . H.nav $ do
+                        compileToc currentPath toc
                     H.main body
                     H.footer $ do
                         H.div ! A.id "copyright" $ do
@@ -250,23 +256,32 @@ readNote unknown   = Left $ mconcat
 #:
 
 #=haskell:
-compileToc :: [Ha.Item TocItem] -> H.Html
-compileToc = H.ol . foldMap compileTocItem
+compileToc :: FilePath -> [Ha.Item TocItem] -> H.Html
+compileToc currentPath = H.ol . foldMap (compileTocItem $ Just currentPath)
 
-compileTocItem :: Ha.Item TocItem -> H.Html
-compileTocItem item = H.li $ do
-  let TocItem title slug children = Ha.itemBody item
-      itemPath                    = Ha.toFilePath (Ha.itemIdentifier item) -<.> "html"
-      itemUrl                     = Text.pack itemPath <> "#" <> slug
-  H.a (H.text title) ! A.href (H.toValue itemUrl)
-  unless (null children) $
-    H.ol (foldMap compileTocItem $ fmap (item $>) children)
+compileTocItem :: Maybe FilePath -> Ha.Item TocItem -> H.Html
+compileTocItem currentPath item =
+    H.li ! (if isCurrent then A.class_ "current" else mempty) $ do
+        H.a (H.text title) ! A.href (H.toValue itemUrl)
+                           ! (if isCurrent then mempty else H.dataAttribute "target" (H.toValue slug))
+        unless (null children) $
+            H.ol (foldMap (compileTocItem Nothing) $ 
+                fmap (item $>) children)
+  where
+    TocItem title slug children = Ha.itemBody item
+    itemPath                    = Ha.toFilePath $ Ha.itemIdentifier item
+    itemURI                     = itemPath -<.> ".html"
+    itemUrl                     = Text.pack itemURI <> "#" <> slug
+    isCurrent                   = Just itemPath == currentPath
 #:
 
 #=haskell:
-compileDocument :: [Ha.Item TocItem] -> Document -> Either ManualError H.Html
-compileDocument toc doc =
-    runManual (compileM (document toc) doc) >>= first CompileError
+compileDocument :: [Ha.Item TocItem] -> Ha.Item Document -> Either ManualError H.Html
+compileDocument toc item =
+    runManual (compileM (document currentPath toc) doc) >>= first CompileError
+  where
+    currentPath = Ha.toFilePath $ Ha.itemIdentifier item
+    doc         = Ha.itemBody item
 
 reqAuto
     :: (Typeable output, Read output, HasMetadata input, Monad context)

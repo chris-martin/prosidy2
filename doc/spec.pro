@@ -1,8 +1,10 @@
 title:      Language specification
+nav-title:  Specification
 author:     James Alexander Feldman-Crough <alex@fldcr.com>
 created:    5 January, 2020
 updated:    5 January, 2020
 revision:   0.WIP
+hide
 toc
 ---
 

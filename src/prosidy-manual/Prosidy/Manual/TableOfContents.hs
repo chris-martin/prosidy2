@@ -12,6 +12,7 @@ import Control.Lens.Operators
 import qualified Data.Text as Text
 import qualified Data.Char as Char
 
+import Data.Maybe (fromMaybe)
 import Data.Binary (Binary(..))
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 
@@ -43,14 +44,11 @@ foldToc = content . L.folded . allSections . L.to toTocItem
     allSections = L.deepOf (_BlockTag . content . L.folded) (_BlockTag . _Tagged "section")
 
 toTocItem :: Region (Seq Block) -> TocItem
-toTocItem r =
-  let
-    theTitle = maybe "???" id $
-               (r ^. setting "nav-title") <|>
-               (r ^. setting "title")
-    theSlug  = maybe (toSlug theTitle) id $ r ^. setting "slug"
-  in
-    TocItem theTitle theSlug $ r ^.. foldToc
+toTocItem r = TocItem navTitle slug $ r ^.. foldToc
+  where
+    realTitle = fromMaybe "UNTITLED" $ r ^. setting "title"
+    navTitle  = fromMaybe realTitle  $ r ^. setting "nav-title"
+    slug      = fromMaybe (toSlug realTitle) $ r ^. setting "slug"
 
 toSlug :: Text -> Text
 toSlug = Text.intercalate "-"
