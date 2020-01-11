@@ -155,7 +155,7 @@ block = choice
 blockTag :: P BlockTag
 blockTag = do
     t <- genericTag (void $ string "#-") $ option mempty blockTagContents
-    endOfLines
+    emptyLines
     pure t
 
 blockTagContents :: P (Seq Block)
@@ -169,7 +169,7 @@ literalTag :: P LiteralTag
 literalTag = genericTag (void $ string "#=") $ do
     close    <- blockTagDelim (void $ optional_ comment *> Megaparsec.newline)
     litLines <- manyTill literalLine $ try (skipSpaces *> close)
-    endOfLines
+    emptyLines
     pure . Literal . Text.Lazy.toStrict $ Text.Lazy.intercalate "\n" litLines
 
 literalLine :: P Text.Lazy.Text
