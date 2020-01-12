@@ -20,8 +20,8 @@ testNames = ["gamut", "literal"]
 test :: IO TestTree
 test = do
     dataDir <- Paths.getDataDir
-    let inputDir  = dataDir <> "/golden/input/"
-        outputDir = dataDir <> "/golden/output/"
+    let inputDir  = dataDir <> "/test-data/golden/input/"
+        outputDir = dataDir <> "/test-data/golden/output/"
     pure . testGroup "Golden" $ fmap (makeTest inputDir outputDir) testNames
 
 

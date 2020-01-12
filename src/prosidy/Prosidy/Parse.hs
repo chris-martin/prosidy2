@@ -9,7 +9,6 @@ Maintainer  : alex@fldcr.com
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE TypeApplications  #-}
-{-# LANGUAGE BlockArguments    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Prosidy.Parse
@@ -26,6 +25,7 @@ module Prosidy.Parse
 where
 
 import           Prosidy.Types
+import Prosidy.Source
 
 import           Text.Megaparsec         hiding ( token )
 import           Text.Megaparsec.Char           ( char
@@ -42,26 +42,29 @@ import qualified Data.Text.Encoding            as Text.Encoding
 import qualified Text.Megaparsec.Char          as Megaparsec
 import qualified Data.ByteString               as ByteString
 
+import Control.Applicative (Alternative)
 import           Data.Bifunctor                 ( first )
 import           Text.Megaparsec.Char.Lexer     ( hexadecimal )
 import           Data.Functor                   ( ($>) )
 import           Data.Foldable                  ( fold
                                                 , traverse_
                                                 )
-import           Control.Monad                  ( void )
+import Data.Traversable (sequenceA)                                            
+import           Control.Monad                  ( MonadPlus, void )
 import           Data.Text                      ( Text )
 import           Data.Void                      ( Void )
 import           Data.Sequence                  ( Seq )
 import           Control.Exception              ( Exception
                                                 , throwIO
                                                 )
+import Control.Monad.Trans.Reader (ReaderT(..))
 
 -------------------------------------------------------------------------------
 -- | Parses a Prosidy 'Document' from its source.
 --
 -- The 'FilePath' parameter is only used for error reporting.
 parseDocument :: FilePath -> Text -> Either Failure Document
-parseDocument path = first Failure . parse doc path
+parseDocument path = runP doc . Source path
 
 -- | Reads a Prosidy 'Document' from the given 'FilePath'.
 --
@@ -79,7 +82,7 @@ readDocument filepath = do
 --
 -- The 'FilePath' parameter is only used for error reporting.
 parseDocumentMetadata :: FilePath -> Text -> Either Failure Metadata
-parseDocumentMetadata path = first Failure . parse docMetadata path
+parseDocumentMetadata path = runP docMetadata . Source path
 
 -- | Reads a Prosidy document's 'Metadata' header from the given 'FilePath'.
 --
@@ -103,15 +106,20 @@ prettyFailure :: Failure -> String
 prettyFailure (Failure e) = errorBundlePretty e
 
 -------------------------------------------------------------------------------
-type P = Parsec Void Text
+newtype P a = P (ReaderT Source (Parsec Void Text) a)
+  deriving newtype (Functor, Applicative, Alternative, Monad, MonadPlus, MonadParsec Void Text)
 
 type MetadataItem = (Key, Maybe Text)
+
+runP :: P a -> Source -> Either Failure a 
+runP (P (ReaderT r)) src@(Source path txt) = 
+    first Failure $ parse (r src) path txt
 
 -------------------------------------------------------------------------------
 doc :: P Document
 doc = do
     header <- docMetadata
-    body   <- Seq.fromList <$> many block
+    body   <- spanned $ Seq.fromList <$> many block
     eof
     pure $ Document header body
 
@@ -129,7 +137,7 @@ docMetadata = do
 docMetadataEnd :: P ()
 docMetadataEnd = do
     void $ string "---"
-    try do
+    try $ do
         skipSpaces
         Megaparsec.newline
         skipSpaces
@@ -138,7 +146,7 @@ docMetadataEnd = do
 docMetadataItem :: P MetadataItem
 docMetadataItem = do
     itemKey <- key
-    itemVal <- optional do
+    itemVal <- optional $ do
         metaItemSep
         option "" text <* skipSpaces
     endOfLines
@@ -147,9 +155,9 @@ docMetadataItem = do
 -------------------------------------------------------------------------------
 block :: P Block
 block = choice
-    [ BlockTag <$> blockTag
-    , BlockLiteral <$> literalTag
-    , BlockParagraph <$> paragraph
+    [ BlockTag <$> spanned blockTag
+    , BlockLiteral <$> spanned literalTag
+    , BlockParagraph <$> spanned paragraph
     ]
 
 blockTag :: P BlockTag
@@ -160,8 +168,8 @@ blockTag = do
 
 blockTagContents :: P (Seq Block)
 blockTagContents = choice
-    [ maybe mempty (Seq.singleton . BlockParagraph . Paragraph)
-        <$> token tagParagraph
+    [ foldMap (Seq.singleton . BlockParagraph . fmap Paragraph) . sequenceA
+        <$> spanned (token tagParagraph)
     , Seq.fromList <$> withBlockDelimiters (emptyLines *> many block)
     ]
 
@@ -174,7 +182,7 @@ literalTag = genericTag (void $ string "#=") $ do
 
 literalLine :: P Text.Lazy.Text
 literalLine = do
-    line <- takeWhileP (Just "literal text") \ch -> ch /= '\r' && ch /= '\n'
+    line <- takeWhileP (Just "literal text") $ \ch -> ch /= '\r' && ch /= '\n'
     Megaparsec.newline
     pure $ Text.Lazy.fromStrict line
 
@@ -183,7 +191,7 @@ blockTagDelim slurp = do
     char ':'
     maybeLabel <- optional keyLike
     skipSpaces <* slurp
-    pure do
+    pure $ do
         string "#:"
         traverse_ string maybeLabel
         skipSpaces
@@ -195,13 +203,16 @@ withBlockDelimiters parser = do
 
 -------------------------------------------------------------------------------
 inline :: P Inline
-inline = choice [InlineTag <$> inlineTag, InlineText <$> text]
+inline = choice 
+    [ InlineTag  <$> spanned inlineTag
+    , InlineText <$> spanned text
+    ]
 
 inlineTag :: P InlineTag
 inlineTag = genericTag sigil . option mempty $ fmap orEmpty tagParagraph
   where
     orEmpty = maybe Seq.empty getNonEmpty
-    sigil   = try do
+    sigil   = try $ do
         void $ char '#'
         void . lookAhead $ satisfy isValidKeyHead
 
@@ -219,9 +230,7 @@ paragraphLike = do
 paragraphLine :: P [Inline]
 paragraphLine = do
     headItem <- inline
-    tailItem <- many do
-        line <- paragraphInline
-        pure line
+    tailItem <- many paragraphInline
     skipSpaces
     pure $ headItem : tailItem
 
@@ -229,7 +238,7 @@ paragraphInline :: P Inline
 paragraphInline = (paragraphSpacer $> Break) <|> inline
 
 paragraphSpacer :: P ()
-paragraphSpacer = try do
+paragraphSpacer = try $ do
     skipSpaces1
     notFollowedBy $ void (string "##") <|> void Megaparsec.newline
 
@@ -240,21 +249,17 @@ tagParagraph = between start end $ option Nothing paragraphLike
     end   = skipSpaces *> char '}'
 
 -------------------------------------------------------------------------------
-genericTag :: P () -> P a -> P (Tagged a)
+genericTag :: P () -> P a -> P (Tagged (Spanned a))
 genericTag sigilParser bodyParser = do
     sigilParser
     thisName     <- toKeyUnchecked <$> keyLike
     thisMetadata <- meta
-    thisContent  <- bodyParser
+    thisContent  <- spanned bodyParser
     pure $ Tagged thisName thisMetadata thisContent
 
 meta :: P Metadata
-meta = option mempty $ between
-    start
-    end
-    do
-        items <- metaItem `sepEndBy` metaSep
-        pure $ foldMap itemToMetadata items
+meta = option mempty $ between start end $
+    foldMap itemToMetadata <$> metaItem `sepEndBy` metaSep
   where
     start = do
         char '['
@@ -265,7 +270,7 @@ meta = option mempty $ between
 metaItem :: P MetadataItem
 metaItem = do
     itemKey <- key <* emptyLines
-    itemVal <- optional do
+    itemVal <- optional $ do
         metaItemSep <* emptyLines
         option "" quotedText
     skipSpaces <* emptyLines
@@ -279,17 +284,15 @@ metaSep = do
 
 -------------------------------------------------------------------------------
 escape :: P Char
-escape = label
-    "escape sequence"
-    do
-        void $ char '\\'
-        choice
-            [ oneOf @[] "#{}[]:='\"\\"
-            , char 'n' $> '\n'
-            , char 't' $> '\t'
-            , char 'r' $> '\r'
-            , char 'u' *> unicodeEscape
-            ]
+escape = label "escape sequence" $ do
+    void $ char '\\'
+    choice
+        [ oneOf @[] "#{}[]:='\"\\"
+        , char 'n' $> '\n'
+        , char 't' $> '\t'
+        , char 'r' $> '\r'
+        , char 'u' *> unicodeEscape
+        ]
 
 unicodeEscape :: P Char
 unicodeEscape = Char.chr <$> hexadecimal
@@ -312,7 +315,7 @@ quotedText = do
         [ Text.Lazy.singleton <$> escape
         , Text.Lazy.fromStrict <$> takeWhile1P
             (Just "quoted text")
-            \ch -> ch /= delim && ch /= '\\'
+            (\ch -> ch /= delim && ch /= '\\')
         ]
     void $ char delim
     skipSpaces
@@ -324,7 +327,7 @@ text = do
     pure . Text.Lazy.toStrict . Text.Lazy.intercalate " " $ parts
 
 textSpace :: P ()
-textSpace = try do
+textSpace = try $ do
     skipSpaces1
     notFollowedBy $ void (char '#') <|> void Megaparsec.newline
 
@@ -333,17 +336,15 @@ word = fmap fold . some $ choice
     [ Text.Lazy.singleton <$> escape
     , Text.Lazy.fromStrict <$> takeWhile1P
         (Just "plain text")
-        \ch -> not $ Set.member ch reserved || Char.isSpace ch
+        (\ch -> not $ Set.member ch reserved || Char.isSpace ch)
     ]
     where reserved = Set.fromList "#{}\\"
 
 -------------------------------------------------------------------------------
 comment :: P ()
-comment = label
-    "comment"
-    do
-        void $ string "##"
-        void $ skipManyTill anySingle (lookAhead Megaparsec.newline)
+comment = label "comment" $ do
+    void $ string "##"
+    void $ skipManyTill anySingle (lookAhead Megaparsec.newline)
 
 endOfLine :: P ()
 endOfLine = do
@@ -380,3 +381,12 @@ itemToMetadata :: MetadataItem -> Metadata
 itemToMetadata (k, Just v ) = Metadata mempty (Map.singleton k v)
 itemToMetadata (k, Nothing) = Metadata (Set.singleton k) mempty
 
+spanned :: P a -> P (Spanned a)
+spanned (P (ReaderT r)) = P . ReaderT $ \src -> do
+    begin  <- Offset . fromIntegral <$> getOffset
+    result <- r src
+    end    <- Offset . fromIntegral <$> getOffset
+    let maybeSpan = if begin /= end 
+                    then Just $ Span src begin end
+                    else Nothing
+    pure $ Spanned maybeSpan result

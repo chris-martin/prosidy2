@@ -1,9 +1,9 @@
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
 module Prosidy.Internal.Optics
     ( Optic'
     , Iso'
+    , Lens
     , Lens'
     , Prism'
     , Affine'
@@ -34,6 +34,7 @@ import           Data.Tagged                    ( Tagged(..) )
 type Optic' p f s a = p a (f a) -> p s (f s)
 
 type Iso' s a = forall p f . Profunctor p => Functor f => Optic' p f s a
+type Lens s t a b = forall p f . Strong p => Functor f => p a (f b) -> p s (f t)
 type Lens' s a = forall p f . Strong p => Functor f => Optic' p f s a
 type Prism' s a = forall p f . Choice p => Applicative f => Optic' p f s a
 type Affine' s a
@@ -44,13 +45,11 @@ iso :: (s -> a) -> (a -> s) -> Iso' s a
 iso get set = dimap get (fmap set)
 {-# INLINE iso #-}
 
-lens :: (s -> a) -> (s -> a -> s) -> Lens' s a
+lens :: (s -> a) -> (s -> b -> t) -> Lens s t a b
 lens get set = dimap into outof . second'
   where
     into x = (x, get x)
     outof (x, f) = fmap (set x) f
-
---set x <$> f (get x)
 {-# INLINE lens #-}
 
 prism :: (a -> s) -> (s -> Maybe a) -> Prism' s a

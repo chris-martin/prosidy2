@@ -30,9 +30,11 @@ library
                      , text                 >=1.2  && <1.3
                      , tagged               >=0.8  && <0.9
                      , template-haskell     == 2.14.*
+                     , transformers         >=0.5  && <0.6
   exposed-modules:     Prosidy
                      , Prosidy.Parse
                      , Prosidy.Types
+                     , Prosidy.Source
   other-modules:       Prosidy.Internal.JSON
                      , Prosidy.Internal.Optics
 

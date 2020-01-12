@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GADTSyntax #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -60,6 +59,7 @@ module Prosidy.Types
 
 import Prosidy.Internal.Optics
 import Prosidy.Internal.JSON
+import Prosidy.Source
 
 import Control.Monad (guard)
 import Data.Foldable (asum)
@@ -83,9 +83,9 @@ import qualified Language.Haskell.TH.Quote as Q
 
 -------------------------------------------------------------------------------
 data Block where
-    BlockTag       :: BlockTag   -> Block
-    BlockParagraph :: Paragraph  -> Block
-    BlockLiteral   :: LiteralTag -> Block
+    BlockTag       :: Spanned BlockTag   -> Block
+    BlockParagraph :: Spanned Paragraph  -> Block
+    BlockLiteral   :: Spanned LiteralTag -> Block
   deriving (Eq, Show)
   deriving (FromJSON, ToJSON) via (JSON Block)
 
@@ -97,23 +97,23 @@ instance Serde Block where
         , noMatch "Expected a LiteralTag, BlockTag, or Paragraph"
         ]
 
-type BlockTag = Tagged (Seq Block)
+type BlockTag = Tagged (Spanned (Seq Block))
 
-type LiteralTag = Tagged Literal
+type LiteralTag = Tagged (Spanned Literal)
 
-_BlockLiteral :: Prism' Block LiteralTag
+_BlockLiteral :: Prism' Block (Spanned LiteralTag)
 _BlockLiteral = prism BlockLiteral $ \case
     BlockLiteral item -> Just item
     _                 -> Nothing
 {-# INLINE _BlockLiteral #-}
 
-_BlockParagraph :: Prism' Block Paragraph
+_BlockParagraph :: Prism' Block (Spanned Paragraph)
 _BlockParagraph = prism BlockParagraph $ \case
     BlockParagraph item -> Just item
     _                   -> Nothing
 {-# INLINE _BlockParagraph #-}
 
-_BlockTag :: Prism' Block BlockTag
+_BlockTag :: Prism' Block (Spanned BlockTag)
 _BlockTag = prism BlockTag $ \case
     BlockTag item -> Just item
     _             -> Nothing
@@ -121,7 +121,7 @@ _BlockTag = prism BlockTag $ \case
 
 -------------------------------------------------------------------------------
 data Document where
-    Document :: Metadata -> Seq Block -> Document
+    Document :: Metadata -> Spanned (Seq Block) -> Document
   deriving (Eq, Show)
   deriving (ToJSON, FromJSON) via (JSON Document)
 
@@ -131,11 +131,11 @@ instance Serde Document where
         <*> field "content"  content
 
 instance HasContent Document where
-    type Content Document = Seq Block
+    type Content Document = Spanned (Seq Block)
     content = lens get set
       where
-        get (Document _ c)   = c
-        set (Document m _) c = Document m c
+        get (Document _ c) = c
+        set (Document m _) = Document m
     {-# INLINE content #-}
 
 instance HasMetadata Document where
@@ -145,14 +145,14 @@ instance HasMetadata Document where
         set (Document _ c) m = Document m c
     {-# INLINE metadata #-}
 
-_Document :: Iso' Document (Region (Seq Block))
+_Document :: Iso' Document (Region (Spanned (Seq Block)))
 _Document = iso (\(Document m c) -> Region m c) (\(Region m c) -> Document m c)
 
 -------------------------------------------------------------------------------
 data Inline where
-    Break       ::              Inline
-    InlineTag   :: InlineTag -> Inline
-    InlineText  :: Text      -> Inline
+    Break       :: Inline
+    InlineTag   :: Spanned InlineTag -> Inline
+    InlineText  :: Spanned Text      -> Inline
   deriving (Eq, Show)
   deriving (FromJSON, ToJSON) via (JSON Inline)
 
@@ -164,7 +164,7 @@ instance Serde Inline where
         , noMatch "Expected an Break, InlineTag, or Inline Text"
         ]
 
-type InlineTag = Tagged (Seq Inline)
+type InlineTag = Tagged (Spanned (Seq Inline))
 
 _Break :: Prism' Inline ()
 _Break = prism (const Break) $ \case
@@ -172,13 +172,13 @@ _Break = prism (const Break) $ \case
     _     -> Nothing
 {-# INLINE _Break #-}
 
-_InlineTag :: Prism' Inline InlineTag
+_InlineTag :: Prism' Inline (Spanned InlineTag)
 _InlineTag = prism InlineTag $ \case
     InlineTag t -> Just t
     _           -> Nothing
 {-# INLINE _InlineTag #-}
 
-_InlineText :: Prism' Inline Text
+_InlineText :: Prism' Inline (Spanned Text)
 _InlineText = prism InlineText $ \case
     InlineText text -> Just text
     _               -> Nothing
@@ -297,8 +297,8 @@ instance HasContent (Tagged content) where
     type Content (Tagged content) = content
     content = lens get set
       where
-        get (Tagged _ _ c)   = c
-        set (Tagged k m _) c = Tagged k m c
+        get (Tagged _ _ c) = c
+        set (Tagged k m _) = Tagged k m
     {-# INLINE content #-}
 
 instance HasMetadata (Tagged c) where
@@ -338,8 +338,8 @@ instance HasContent (Region content) where
     type Content (Region content) = content
     content = lens get set
       where
-        get (Region _ c)   = c
-        set (Region m _) c = Region m c
+        get (Region _ c) = c
+        set (Region m _) = Region m
     {-# INLINE content #-}
 
 instance HasMetadata (Region c) where
@@ -384,8 +384,8 @@ property key = properties . lens get set
 settings :: HasMetadata node => Lens' node (Map Key Text)
 settings = metadata . lens get set
   where
-    get (Metadata _ xs)    = xs
-    set (Metadata ys _) xs = Metadata ys xs
+    get (Metadata _ xs) = xs
+    set (Metadata ys _) = Metadata ys
 {-# INLINE settings #-}
 
 setting :: HasMetadata node => Key -> Lens' node (Maybe Text)
