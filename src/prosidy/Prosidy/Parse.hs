@@ -162,23 +162,26 @@ block = choice
 
 blockTag :: P BlockTag
 blockTag = do
-    t <- genericTag (void $ string "#-") $ option mempty blockTagContents
+    t <- genericTag (void $ string "#-") $ option (Spanned Nothing mempty) blockTagContents
     emptyLines
     pure t
 
-blockTagContents :: P (Seq Block)
+blockTagContents :: P (Spanned (Seq Block))
 blockTagContents = choice
-    [ foldMap (Seq.singleton . BlockParagraph . fmap Paragraph) . sequenceA
-        <$> spanned (token tagParagraph)
-    , Seq.fromList <$> withBlockDelimiters (emptyLines *> many block)
+    [ spanned
+          $ foldMap (Seq.singleton . BlockParagraph . fmap Paragraph) . sequenceA
+        <$> token tagParagraph
+    , spanned
+          $ Seq.fromList 
+        <$> withBlockDelimiters (emptyLines *> many block)
     ]
 
 literalTag :: P LiteralTag
 literalTag = genericTag (void $ string "#=") $ do
     close    <- blockTagDelim (void $ optional_ comment *> Megaparsec.newline)
-    litLines <- manyTill literalLine $ try (skipSpaces *> close)
+    litLines <- spanned . manyTill literalLine $ try (skipSpaces *> close)
     emptyLines
-    pure . Literal . Text.Lazy.toStrict $ Text.Lazy.intercalate "\n" litLines
+    pure $ Literal . Text.Lazy.toStrict . Text.Lazy.intercalate "\n" <$> litLines
 
 literalLine :: P Text.Lazy.Text
 literalLine = do
@@ -209,9 +212,10 @@ inline = choice
     ]
 
 inlineTag :: P InlineTag
-inlineTag = genericTag sigil . option mempty $ fmap orEmpty tagParagraph
+inlineTag = genericTag sigil . option (Spanned Nothing mempty) $
+    fmap orEmpty tagParagraph
   where
-    orEmpty = maybe Seq.empty getNonEmpty
+    orEmpty = fmap $ maybe Seq.empty getNonEmpty
     sigil   = try $ do
         void $ char '#'
         void . lookAhead $ satisfy isValidKeyHead
@@ -242,19 +246,20 @@ paragraphSpacer = try $ do
     skipSpaces1
     notFollowedBy $ void (string "##") <|> void Megaparsec.newline
 
-tagParagraph :: P (Maybe (NonEmpty Seq Inline))
-tagParagraph = between start end $ option Nothing paragraphLike
+tagParagraph :: P (Spanned (Maybe (NonEmpty Seq Inline)))
+tagParagraph = between start end . spanned $ 
+    option Nothing paragraphLike
   where
     start = char '{' *> skipSpaces *> optional_ endOfLine
     end   = skipSpaces *> char '}'
 
 -------------------------------------------------------------------------------
-genericTag :: P () -> P a -> P (Tagged (Spanned a))
+genericTag :: P () -> P (Spanned a) -> P (Tagged a)
 genericTag sigilParser bodyParser = do
     sigilParser
     thisName     <- toKeyUnchecked <$> keyLike
     thisMetadata <- meta
-    thisContent  <- spanned bodyParser
+    thisContent  <- bodyParser
     pure $ Tagged thisName thisMetadata thisContent
 
 meta :: P Metadata

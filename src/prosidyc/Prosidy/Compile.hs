@@ -9,35 +9,44 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 module Prosidy.Compile
     ( Compile
-    , RuleT
-    , Rule
+    , ProductT
+    , SumT
     , Desc
     , Item
     , Choice
     , Error(..)
+    , tags
+    , tagRule
+    , blockRule
+    , inlineRule
+    , documentRule
+    , paragraphRule
+    , rule
     , access
     , staticOnly
     , compileM
     , compile
-    , rule
-    , choose
     , self
     , prop
     , req
     , opt
-    , descend
+    , child
+    , children
     , embed
-    , (@?)
-    )
-where
+    , disallow
+    ) where
 
 import qualified Prosidy.Compile.Internal.Eval as Eval
 import qualified Prosidy.Compile.Internal.Spec as Spec
 import qualified Prosidy.Compile.Internal.Util as Util
 import qualified Control.Lens                  as L
+import Control.Lens.Operators
 
+import Data.Sequence (Seq)
 import           Prosidy.Compile.Internal.Spec  ( ItemKey(..) )
 import           Prosidy.Compile.Internal.Error ( Errors
                                                 , Result(..)
@@ -45,12 +54,33 @@ import           Prosidy.Compile.Internal.Error ( Errors
                                                 , resultError
                                                 , liftResult
                                                 , eachError
+                                                , mapErrors
+                                                , raiseError
                                                 )
-
 import           Prosidy.Types                  ( Key
                                                 , HasMetadata
-                                                )
-
+                                                , Tagged
+                                                , Region
+                                                , Paragraph
+                                                , Literal
+                                                , LiteralTag
+                                                , BlockTag
+                                                , InlineTag
+                                                , Block
+                                                , Inline
+                                                , _BlockTag
+                                                , _BlockLiteral
+                                                , _InlineTag
+                                                , _BlockParagraph
+                                                , _InlineText
+                                                , _Literal
+                                                , _Break
+                                                , _Tagged
+                                                , _Paragraph
+                                                , Document
+                                                , HasContent(..)
+                                                , pattern Key) 
+import Prosidy.Source (Spanned(..), Span, spanning, spanOf) 
 import           Data.Functor                   ( ($>) )
 import           Data.Foldable                  ( asum )
 import           Control.Monad.Morph            ( MFunctor(..) )
@@ -86,9 +116,8 @@ data Error =
   | RuleConflict ItemKey
   deriving stock (Eq, Show, Generic)
 
-type Rule input output = RuleT input Identity output
-
-type RuleT input context output = Compile (Item input context output)
+type ProductT input context output = Compile (Item input context output)
+type SumT input context output = Compile (Choice input context output)
 
 newtype Desc input context output = Desc
     (Spec.Spec (Eval.Eval input context output))
@@ -125,7 +154,8 @@ data AlgebraicInfo =
   deriving anyclass (Hashable)
 
 data ProductInfo = ProductInfo
-    { propertyInfo :: HashMap Key Spec.PropertyInfo
+    { description  :: Text
+    , propertyInfo :: HashMap Key Spec.PropertyInfo
     , settingInfo  :: HashMap Key Spec.SettingInfo
     , descentKey   :: Maybe ItemKey
     }
@@ -159,7 +189,7 @@ staticOnly (Compile c) = result $> registry
 compileM
     :: forall input context output
      . Monad context
-    => RuleT input context output
+    => ProductT input context output
     -> input
     -> context (Either Error output)
 compileM (Compile c) input = runExceptT $ do
@@ -170,57 +200,153 @@ compileM (Compile c) input = runExceptT $ do
     specResult :: Either Error (Item input context output)
     (specResult, _) = c mempty
 
-compile :: Rule input output -> input -> Either Error output
+compile :: ProductT input Identity output -> input -> Either Error output
 compile c = runIdentity . compileM c
 
 -------------------------------------------------------------------------------
-rule
-    :: forall input context output
-     . (Typeable input, Typeable output, Monad context)
-    => Text
-    -> Desc input context output
-    -> RuleT input context output
-rule name (Desc spec) = liftCompileM $ do
-    (eval, Spec.SpecState props settings into) <-
-        foldResult
-                (throwError . SpecError . eachError (Spec.WrappedSpecError name)
-                )
-                pure
-            $ Spec.specify spec
-    let key   = ItemKey name
-        pinfo = ProductInfo props settings into
-        info  = ItemInfo key (Product pinfo)
-    Util.setOnceFail (L.at key) (RuleConflict key) info
-    pure $ Item info (Eval.evaluate $ Eval.wrapEvalError name eval)
+tagRule :: forall input output context. (Typeable input, Typeable output, Monad context) 
+    => Key
+    -> Text
+    -> Desc (Region input) context output
+    -> SumT (Spanned (Tagged input)) context output
+tagRule key@(Key name) description desc = liftCompileM $ do
+    (info, doEval) <- prepare name description desc
+    pure . Choice info $ \item ->
+      let 
+        runEval    = wrapErrors name (item ^? spanOf) . Eval.evaluate doEval
+        region'    = L.preview (spanning . _Tagged key) item
+      in 
+        runEval <$> region'
 
-choose
-    :: forall input context output
+blockRule :: (Typeable output, Monad context) 
+          => Text
+          -> Item (Spanned Paragraph)  context output
+          -> Item (Spanned LiteralTag) context output
+          -> Item (Spanned BlockTag)   context output
+          -> ProductT Block context output
+blockRule name onPg onLit onBlock = choose name
+    [ oneChoice _BlockTag onBlock
+    , oneChoice _BlockLiteral onLit
+    , oneChoice _BlockParagraph onPg
+    ] 
+
+inlineRule :: (Typeable output, Monad context)
+          => Text
+          -> context output
+          -> (Text -> context output)
+          -> Item (Spanned InlineTag)  context output
+          -> ProductT Inline context output
+inlineRule name onBreak onText onTag = choose name
+    [ oneChoice _InlineTag onTag
+    , oneChoice _InlineText $ Item
+        { itemMetadata = ItemInfo
+            { ruleKey = Spec.itemKey @Text (name <> " text")
+            , ruleInfo = Product $ ProductInfo
+                { description  = "plain text"
+                , propertyInfo = mempty
+                , settingInfo  = mempty
+                , descentKey   = Nothing
+                }
+            }
+        , evalItem = \item -> fmap Ok . onText $ L.view spanning item
+        }
+    , oneChoice _Break $ Item
+        { itemMetadata = ItemInfo
+            { ruleKey = Spec.itemKey @() (name <> " break")
+            , ruleInfo = Product $ ProductInfo
+                { description  = "break"
+                , propertyInfo = mempty
+                , settingInfo  = mempty
+                , descentKey   = Nothing
+                }
+            }
+        , evalItem = const $ Ok <$> onBreak
+        }
+    ]
+
+paragraphRule :: forall context output. (Typeable output, Monad context, Monoid (context (Result Eval.EvalError output)))
+    => Item Inline context output
+    -> (output -> context output)
+    -> ProductT (Spanned Paragraph) context output
+paragraphRule item wrapContent = liftCompileM $ do
+    (info, doEval) <- prepare "paragraph" "description" $
+        descend item $ spanning . _Paragraph . L.folded
+    pure . Item info $ \input -> do
+        let span = input ^? spanOf
+            wrap = wrapErrors "paragraph" span
+        result <- wrap $ Eval.evaluate doEval input
+        traverse wrapContent result
+
+documentRule :: forall output context. (Typeable output, Monad context) 
+    => Desc Document context output
+    -> ProductT Document context output
+documentRule desc = liftCompileM $ do
+    (info, doEval) <- prepare "document" "top-level document" desc
+    pure . Item info $ Eval.evaluate doEval
+
+rule :: forall input output context. (Typeable input, Typeable output, Monad context) 
+     => Text 
+     -> Text
+     -> Desc input context output 
+     -> ProductT input context output
+rule name description desc  = liftCompileM $ do
+    (info, doEval) <- prepare name description desc 
+    pure . Item info $ Eval.evaluate doEval
+
+prepare :: forall input output context. (Typeable input, Typeable output, Monad context) 
+     => Text 
+     -> Text
+     -> Desc input context output 
+     -> CompileM (ItemInfo, Eval.Eval input context output)
+prepare name desc (Desc spec) = do
+    (doEval, specState) <- case Spec.specify spec of
+        Ok   ok -> pure ok
+        Fail e  -> throwError . SpecError . eachError (Spec.Wrapped name) $ e
+    let Spec.SpecState props settings inner = specState
+        ikey  = Spec.itemKey @(Spanned (Tagged input)) name
+        pinfo = ProductInfo desc props settings inner
+        info  = ItemInfo ikey (Product pinfo)
+    Util.setOnceFail (L.at ikey) (RuleConflict ikey) info
+    pure (info, doEval)
+
+tags :: forall input context output
      . (Typeable input, Typeable output, Monad context)
     => Text
-    -> [Choice input context output]
-    -> RuleT input context output
-choose name choices = liftCompileM $ do
-    let key   = ItemKey name
+    -> [Choice (Spanned (Tagged input)) context output]
+    -> ProductT (Spanned (Tagged input)) context output
+tags name choices = liftCompileM $ do
+    let ikey  = Spec.itemKey @(Spanned (Tagged input)) name
         sinfo = SumInfo $ fmap choiceMetadata choices
-        info  = ItemInfo key (Sum sinfo)
-    Util.setOnceFail (L.at key) (RuleConflict key) info
-    pure . Item info $ \input ->
+        iinfo = ItemInfo ikey (Sum sinfo)
+    Util.setOnceFail (L.at ikey) (RuleConflict ikey) iinfo
+    pure . Item iinfo $ \input ->
         case asum $ fmap (flip evalChoice input) choices of
             Just result -> result
-            Nothing ->
-                pure . resultError . Eval.WrappedEvalError name $ Eval.NoMatches
-                    (fmap (ruleName . ruleKey . choiceMetadata) choices)
-
-infix 3 @?
-(@?)
-    :: Util.Affine' input choice
-    -> Item choice context output
-    -> Choice input context output
-a @? item = Choice { choiceMetadata = itemMetadata item
-                   , evalChoice     = fmap (evalItem item) . L.preview a
-                   }
+            Nothing -> 
+              let
+                failures = fmap (ruleName . ruleKey . choiceMetadata) choices
+                theError = Eval.Wrapped name (input $> Eval.NoMatches failures)
+              in
+                pure $ resultError theError
 
 -------------------------------------------------------------------------------
+children :: (Monoid (context (Result Eval.EvalError output)), Content input ~ Seq child, HasContent input, Monad context)
+    => Item child context output
+    -> Desc input context output
+children onChild = descend onChild (content . L.folded)
+
+child :: (HasContent input, Monad context)
+    => Item (Content input) context output
+    -> Desc input context output
+child onChild = descend onChild content
+
+disallow :: forall input context output. (Typeable input, Monad context) => Text -> Item input context output
+disallow message = Item itemInfo . const . pure . resultError $ Eval.CustomError message
+  where
+    itemKey  = Spec.itemKey @input "disallowed"
+    itemInfo = ItemInfo itemKey (Product pInfo)
+    pInfo    = ProductInfo message mempty mempty Nothing
+    
 descend
     :: Monad context
     => Item child context output
@@ -281,3 +407,30 @@ liftCompileM (ExceptT (StateT f)) = Compile $ runIdentity . f
 
 descM :: Spec.SpecM (Eval.EvalM i m a) -> Desc i m a
 descM = Desc . Spec.specM . fmap Eval.evalM
+
+choose :: forall input context output. (Typeable input, Typeable output, Monad context)
+    => Text
+    -> [Choice input context output]
+    -> ProductT input context output
+choose name choices = liftCompileM $ do
+    let key   = Spec.itemKey @input name
+        sinfo = SumInfo $ fmap choiceMetadata choices
+        info  = ItemInfo key (Sum sinfo)
+    Util.setOnceFail (L.at key) (RuleConflict key) info
+    pure . Item info $ \input ->
+        case asum $ fmap (flip evalChoice input) choices of
+            Just result -> result
+            Nothing ->
+                pure . resultError . Eval.Wrapped name . Spanned Nothing $ Eval.NoMatches
+                    (fmap (ruleName . ruleKey . choiceMetadata) choices)
+
+oneChoice :: Util.Affine' input choice
+    -> Item choice context output
+    -> Choice input context output
+oneChoice sel item = Choice
+    { choiceMetadata = itemMetadata item
+    , evalChoice     = fmap (evalItem item) . L.preview sel
+    }
+
+wrapErrors :: Functor c => Text -> Maybe Span -> c (Result Eval.EvalError o) -> c (Result Eval.EvalError o)
+wrapErrors name span = fmap (mapErrors $ Eval.Wrapped name . Spanned span)

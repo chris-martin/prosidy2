@@ -1,0 +1,19 @@
+# HLint configuration file
+# https://github.com/ndmitchell/hlint
+##########################
+
+# This file contains a template configuration file, which is typically
+# placed as .hlint.yaml in the root of your project
+
+# Specify additional command line arguments
+#
+# - arguments: [--color, --cpp-simple, -XQuasiQuotes]
+
+- arguments:
+  - --git
+  - -XNoCPP
+  - '--extension=hs'
+
+- ignore: {name: 'Redundant $'}
+- ignore: {name: 'Redundant do'}
+- ignore: {name: 'Use <$>'}

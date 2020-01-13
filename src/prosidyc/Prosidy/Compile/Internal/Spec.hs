@@ -23,6 +23,7 @@ import           Data.Text                      ( Text )
 import           Data.HashMap.Strict            ( HashMap )
 import           Type.Reflection                ( Typeable
                                                 , SomeTypeRep(..)
+                                                , typeRep
                                                 )
 import           GHC.Generics                   ( Generic )
 import           Data.Hashable                  ( Hashable )
@@ -38,10 +39,11 @@ import qualified Control.Lens                  as L
 newtype Spec output = Spec
     { runSpec :: SpecState -> (Result SpecError output, SpecState) }
   deriving (Functor, Applicative, Monad)
-    via (SpecM)
+    via SpecM
 
-newtype ItemKey = ItemKey
-    { ruleName   :: Text
+data ItemKey = ItemKey
+    { ruleName      :: Text
+    , ruleInputType :: SomeTypeRep
     }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (Hashable)
@@ -58,7 +60,7 @@ data SpecError =
   | PropertyConflict Key PropertyInfo
   | SettingConflict Key SettingInfo
   | SubruleConflict ItemKey
-  | WrappedSpecError Text SpecError
+  | Wrapped Text SpecError
   deriving stock (Eq, Generic, Show)
   deriving anyclass (Hashable)
 
@@ -92,6 +94,9 @@ specifySetting
 specifySetting required key description = specM $ do
     let info = SettingInfo key description (typeOf @output) required
     setOnce (settingMap . L.at key) (SettingConflict key) info
+
+itemKey :: forall a. Typeable a => Text -> ItemKey
+itemKey text = ItemKey text $ SomeTypeRep (typeRep @a)
 
 -------------------------------------------------------------------------------
 type SpecM = ResultT SpecError (State SpecState)

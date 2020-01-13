@@ -97,9 +97,9 @@ instance Serde Block where
         , noMatch "Expected a LiteralTag, BlockTag, or Paragraph"
         ]
 
-type BlockTag = Tagged (Spanned (Seq Block))
+type BlockTag = Tagged (Seq Block)
 
-type LiteralTag = Tagged (Spanned Literal)
+type LiteralTag = Tagged Literal
 
 _BlockLiteral :: Prism' Block (Spanned LiteralTag)
 _BlockLiteral = prism BlockLiteral $ \case
@@ -128,15 +128,15 @@ data Document where
 instance Serde Document where
     serde = Document
         <$> field "metadata" metadata
-        <*> field "content"  content
+        <*> field "content"  spannedContent
 
 instance HasContent Document where
-    type Content Document = Spanned (Seq Block)
-    content = lens get set
+    type Content Document = Seq Block
+    spannedContent = lens get set
       where
         get (Document _ c) = c
         set (Document m _) = Document m
-    {-# INLINE content #-}
+    {-# INLINE spannedContent #-}
 
 instance HasMetadata Document where
     metadata = lens get set
@@ -145,7 +145,7 @@ instance HasMetadata Document where
         set (Document _ c) m = Document m c
     {-# INLINE metadata #-}
 
-_Document :: Iso' Document (Region (Spanned (Seq Block)))
+_Document :: Iso' Document (Region (Seq Block))
 _Document = iso (\(Document m c) -> Region m c) (\(Region m c) -> Document m c)
 
 -------------------------------------------------------------------------------
@@ -164,7 +164,7 @@ instance Serde Inline where
         , noMatch "Expected an Break, InlineTag, or Inline Text"
         ]
 
-type InlineTag = Tagged (Spanned (Seq Inline))
+type InlineTag = Tagged (Seq Inline)
 
 _Break :: Prism' Inline ()
 _Break = prism (const Break) $ \case
@@ -289,17 +289,17 @@ _Paragraph = iso (\(Paragraph xs) -> xs) Paragraph
 
 -------------------------------------------------------------------------------
 data Tagged content where
-    Tagged :: Key -> Metadata -> content -> Tagged content
+    Tagged :: Key -> Metadata -> Spanned content -> Tagged content
   deriving stock (Eq, Foldable, Functor, Show, Traversable)
   deriving (FromJSON, ToJSON) via (JSON (Tagged content))
 
 instance HasContent (Tagged content) where
     type Content (Tagged content) = content
-    content = lens get set
+    spannedContent = lens get set
       where
         get (Tagged _ _ c) = c
         set (Tagged k m _) = Tagged k m
-    {-# INLINE content #-}
+    {-# INLINE spannedContent #-}
 
 instance HasMetadata (Tagged c) where
     metadata = lens get set
@@ -312,7 +312,7 @@ instance (Typeable c, ToJSON c, FromJSON c) => Serde (Tagged c) where
     serde = Tagged
         <$> field "name" tag
         <*> field "metadata" metadata
-        <*> field "content" content
+        <*> field "content" spannedContent
 
 tag :: Lens' (Tagged c) Key
 tag = lens get set
@@ -330,17 +330,17 @@ _Tagged key = prism (addTag key) $ \case
 
 -------------------------------------------------------------------------------
 data Region content where
-    Region :: Metadata -> content -> Region content
+    Region :: Metadata -> Spanned content -> Region content
   deriving stock (Eq, Foldable, Functor, Show, Traversable)
   deriving (FromJSON, ToJSON) via (JSON (Region content))
 
 instance HasContent (Region content) where
     type Content (Region content) = content
-    content = lens get set
+    spannedContent = lens get set
       where
         get (Region _ c) = c
         set (Region m _) = Region m
-    {-# INLINE content #-}
+    {-# INLINE spannedContent #-}
 
 instance HasMetadata (Region c) where
     metadata = lens get set
@@ -352,7 +352,7 @@ instance HasMetadata (Region c) where
 instance (Typeable c, ToJSON c, FromJSON c) => Serde (Region c) where
     serde = Region
         <$> field "metadata" metadata
-        <*> field "content" content
+        <*> field "content" spannedContent
 
 addTag :: Key -> Region c -> Tagged c
 addTag key (Region m c) = Tagged key m c
@@ -360,8 +360,13 @@ addTag key (Region m c) = Tagged key m c
 -------------------------------------------------------------------------------
 class HasContent node where
     type family Content node
-    content :: Lens' node (Content node)
+    spannedContent :: Lens' node (Spanned (Content node))
 
+    content :: Lens' node (Content node)
+    content = spannedContent . spanning
+
+    {-# INLINE content #-}
+    {-# MINIMAL spannedContent #-}
 -------------------------------------------------------------------------------
 class HasMetadata node where
     metadata :: Lens' node Metadata

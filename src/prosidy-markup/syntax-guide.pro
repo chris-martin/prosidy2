@@ -2,43 +2,33 @@ title: Syntax Guide
 style: style.css
 ---
 
-#-section:endsection
 #-h{Headers}
 
-#=prosidy:
+#=code[lang='prosidy']:
 #-h{This will be rendered as an h2 tag.}
 #-h+{This will be rendered as an h3 tag.}
 #-h++{This will be rendered as an h4 tag.}
 #:
 
-#-section[class='out']:
 #-h{This will be rendered as an h2 tag.}
 #-h+{This will be rendered as an h3 tag.}
 #-h++{This will be rendered as an h4 tag.}
-#:
-#:endsection
 
-#-section:endsection
 #-h{Emphasis}
 
-#=prosidy:
+#=code[lang='prosidy']:
 #i{This text will be italic,} #b{and this text will be bold.}
 You #i{#b{can}} combine them if you like.
 #:
 
-#-section[class='out']:
 #i{This text will be italic,} #b{and this text will be bold.}
 You #i{#b{can}} combine them if you like.
-#:
-#:endsection
 
-#-section:endsection
 #-h{Lists}
 
-#-section:endsubsection
 #-h+{Unordered}
 
-#=prosidy:end
+#=code[lang='prosidy']:end
 #-list:
   #-item{Item 1}
   #-item:
@@ -58,7 +48,6 @@ You #i{#b{can}} combine them if you like.
 #:
 #:end
 
-#-section[class='out']:
 #-list:
   #-item{Item 1}
   #-item:
@@ -76,12 +65,9 @@ You #i{#b{can}} combine them if you like.
     #:
   #:
 #:
-#:
-#:endsubsection
 
-#-section:endsubsection
 #-h+{Ordered}
-#=prosidy:end
+#=code[lang='prosidy']:end
 #-list[ord]:
   #-item{Item 1}
 
@@ -103,7 +89,6 @@ You #i{#b{can}} combine them if you like.
 #:
 #:end
 
-#-section[class='out']:
 #-list[ord]:
   #-item{Item 1}
 
@@ -123,13 +108,9 @@ You #i{#b{can}} combine them if you like.
     #:
   #:
 #:
-#:
-#:endsubsection
-#:endsection
 
-#-section:endsection
 #-h{Images}
-#=prosidy:end
+#=code[lang='prosidy']:end
 These images are inline—
 #image[url='https://placekitten.com/32/32?1'],
 #image[url='https://placekitten.com/32/32?2', title='The "title" key attaches "alt-text"'],
@@ -138,54 +119,41 @@ but block images are also supported!
 #-image[url='https://placekitten.com/400/200?3']{And block images support captions!}
 #:end
 
-#-section[class='out']:
 These images are inline—
 #image[url='https://placekitten.com/32/32?1'],
 #image[url='https://placekitten.com/32/32?2', title='The "title" key attaches "alt-text"'],
 but block images are also supported!
 
 #-image[url='https://placekitten.com/400/200?3']{And block images support captions!}
-#:
-#:endsection
 
-#-section:endsection
 #-h{Links}
-#=prosidy:end
+#=code[lang='prosidy']:end
 Here's a link to the #link[url='https://prosidy.org']{Prosidy homepage}.
 #:end
 
-#-section[class='out']:
 Here's a link to the #link[url='https://prosidy.org']{Prosidy homepage}.
-#:
-#:endsection
 
-#-section:endsection
 #-h{Blockquotes}
-#=prosidy:end
+#=code[lang='prosidy']:end
 #-quote:
   Everything within a "quote" block is rendered as block quotes.
 #:
 #:end
 
-#-section[class='out']:
 #-quote:
   Everything within a "quote" block is rendered as block quotes.
 #:
-#:
-#:endsection
 
-#-section:endsection
 #-h{Code}
 
-#-section:endsubsection
 #-h+{Code blocks}
-#=prosidy:end
-#=haskell:
+#=code[lang='prosidy']:end
+#=code[lang='haskell']:
 fibonacci :: [Integer]
 fibonacci = 0 : 1 : zipWith (+) fib (tail fib)
 #:
 
-#=python:
+#=code[lang='python']:
 def fibonacci(n):
     a = 0
     b = 1
@@ -195,13 +163,12 @@ def fibonacci(n):
 #:
 #:end
 
-#-section[class='out']:
-#=haskell:
+#=code[lang='haskell']:
 fibonacci :: [Integer]
 fibonacci = 0 : 1 : zipWith (+) fib (tail fib)
 #:
 
-#=python:
+#=code[lang='python']:
 def fibonacci(n):
     a = 0
     b = 1
@@ -209,17 +176,10 @@ def fibonacci(n):
       (a, b) = (b, a + b)
     return a
 #:
-#:
-#:endsubsection
 
-#-section:endsubsection
 #-h+{Inline code}
-#=prosidy:end
+#=code[lang='prosidy']:end
 Some code: #lit{foo} #lit{bar}.
 #:end
-#-section:
-Some code: #lit{foo} #lit{bar}.
-#:
-#:endsubsection
-#:endsection
 
+Some code: #lit{foo} #lit{bar}.

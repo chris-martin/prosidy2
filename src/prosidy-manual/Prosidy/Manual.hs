@@ -1,33 +1,20 @@
-## vi: ft=prosidy wrap
-title: Manual.lhs
-created: 2020-01-01T17:22-8000
-updated: 2020-01-01T17:22-8000
-
----
-
-#=haskell:
 {-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE RecursiveDo       #-}
 {-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE TypeFamilies      #-}
-#:
-
-#=haskell[hide]:
 module Prosidy.Manual
     ( compileDocument
     , compileToc
     , ManualError(..)
     ) where
-#:
-
-#=haskell:
 import Prosidy
 import Prosidy.Compile
 import Prosidy.Manual.Monad
 import Prosidy.Manual.TableOfContents
 
+import Data.Tuple (swap)
 import Data.Functor (($>))
 import Data.Bifunctor      (Bifunctor(..))
 import Data.Text           (Text)
@@ -42,86 +29,61 @@ import Control.Lens.Operators
 import Data.Traversable (sequenceA)
 import System.FilePath((-<.>))
 import Data.Maybe (fromMaybe)
+import Data.Text.Encoding (encodeUtf8)
 
 import qualified Hakyll as Ha (Item, Identifier, toFilePath, itemIdentifier, itemBody)
 
 import qualified Control.Lens                as L
 import qualified Data.Text                   as Text
+import qualified Data.ByteString             as BS
+import qualified Data.Char                   as Char
 import qualified Text.Blaze.Html5            as H
 import qualified Text.Blaze.Html5.Attributes as A
-#:
 
-#=haskell:
 type Html input = RuleT input Manual H.Html
-#:
 
-Our rules for parsing are all contained inside of the #lit{document} rule. Prosidy requires that a rule must be registered before it can be used to prevent some issues with non-termination.
-
-Because rules are mutually recursive, we have to use #lit{MonadFix} for this to work! #lit{RecursiveDo} is a wonderful extension that provides from syntactic sugar for this.
-
-#=haskell:
 document :: FilePath -> [Ha.Item TocItem] -> Html Document
 document currentPath toc = mdo
-#:
-
-Let's start with the non-recursive rules.
-
-For text nodes, we should just convert their content directly into HTML. The #lit{self} descriptor returns the focus of a rule directly.
-
-#=haskell:
-    plainText <- rule @Text @Manual @H.Html "plain text" $
-       fmap H.text self
-#:
-
-Prosidy inserts empty markers called #def{breaks} between lines in a paragraph and before or after an inline tag (if it has a space on that side). Because #i{CJKV} languages don't really care about spacing, we don't assume the user wants a space in these situations.
-
-The Prosidy manual, however, is in English, which #i{does} want spaces in these locations. When we encounter a break, we should render a single space.
-
-#=haskell:
-    break <- rule "break" $
-        pure $ H.text " "
-#:
-
-#=haskell:
+    plainTextText <- rule "plain text (as text)" $ self
+    plainText     <- rule "plain text" $ fmap H.text self
+    breakText <- rule "break (text)" $ pure (" " :: Text)
+    break     <- rule "break" $ pure $ H.text " "
     block <- choose "block context"
-        [ _BlockParagraph @? paragraph
-        , _BlockTag @? blockTag
+        [ _BlockParagraph . spanning @? paragraph
+        , _BlockTag . spanning @? blockTag
         ]
 
     inline <- choose "inline context"
         [ _Break @? break
-        , _InlineTag @? inlineTag
-        , _InlineText @? plainText
+        , _InlineTag . spanning @? inlineTag
+        , _InlineText . spanning @? plainText
         ]
-#:
 
-#=haskell:
+    onlyText <- choose "inline context (only text)"
+        [ _Break @? breakText
+        , _InlineText . spanning  @? plainTextText
+        ]
+
     paragraph <- rule "paragraph" $ do
         body <- descend inline $ _Paragraph . L.folded
         pure $ H.p body
-#:
 
-#=haskell:
     blockTag <- choose "block tag"
         [ _Tagged "section" @? section
         , _Tagged "note" @? note
+        , _Tagged "list" @? list
         ]
 
     inlineTag <- choose "inline tag"
         [ _Tagged "b" @? bold
         , _Tagged "i" @? italics
+        , _Tagged "chars" @? chars
         , _Tagged "lit" @? inlineLiteral
         , _Tagged "def" @? definition
-        , _Tagged "ref" @? reference
+        , _Tagged "term" @? reference
         , _Tagged "link" @? link
         ]
-#:
 
-With that out of the way, lets start defining custom elements for the manual.
-
-#-section[title='Custom Markup']:
-
-#=haskell:
     bold <- rule "boldface" $ do
         body <- descend inline $ content . L.folded
         pure $ H.strong body
@@ -129,15 +91,47 @@ With that out of the way, lets start defining custom elements for the manual.
     italics <- rule "italics" $ do
         body <- descend inline $ content . L.folded
         pure $ H.em body
-#:
 
-#=haskell:
     inlineLiteral <- rule "inline literal" $ do
         body <- descend inline $ content . L.folded
         pure $ H.code body
-#:
 
-#=haskell:
+    listItemBody <- rule "list item body" $ do
+        body <- descend block $ content . L.folded
+        pure $ H.li body
+
+    listItem <- choose "list item" 
+        [ _BlockTag . spanning . _Tagged "item" @? listItemBody
+        ]
+
+    list <- rule "list" $ do
+        body <- descend listItem $ content . L.folded
+        pure $ H.ul body
+
+    chars <- rule "chars" $ do
+        noEscape <- prop "no-escape" "Do not escape the `rep` setting."
+        rep      <- reqText "rep" "The literal representation of the inner text."
+        text     <- descend onlyText $ content . L.folded
+        pure $ do
+            let pickHex  = (!!) "0123456789ABCDEF" . fromIntegral
+                toHex 0 acc = acc
+                toHex n acc = uncurry toHex
+                    . second ((: acc) . pickHex)
+                    $ n `quotRem` 16
+            H.span ! A.class_ "char-sequence" $ do
+                H.text text
+                " ("
+                H.code ! A.class_ "char-sequence-literal" $
+                    foldMap (H.span . H.toHtml) $ 
+                        if noEscape 
+                        then Text.unpack rep
+                        else foldMap Char.showLitChar (Text.unpack rep) ""
+                "; "
+                H.code ! A.class_ "char-sequence-utf-8" $ do
+                    for_ (Text.unpack rep) $ \ch -> H.span $
+                        H.toHtml . foldr toHex [] . BS.unpack . encodeUtf8 $ 
+                            Text.singleton ch
+                ")"
     note <- rule "note" $ do
       level <- req readNote "level"
         "The level of the note. Can be 'caution', 'note', or 'wip'"
@@ -149,9 +143,7 @@ With that out of the way, lets start defining custom elements for the manual.
               WIP     -> "wip"
         H.aside ! A.class_ levelHtml $ do
           body
-#:
 
-#=haskell:
     link <- rule "link" $ do
       url <- reqText "url" "The URL to link to."
       external <- prop "external" "If provided, open links in a new window."
@@ -160,19 +152,25 @@ With that out of the way, lets start defining custom elements for the manual.
         H.a ! A.href (H.toValue url)
             ! (if external then A.target "blank" else mempty)
             $ body
-#:
 
-#=haskell:
     definition <- rule "term definition" $ do
-        body <- descend inline $ content . L.folded
-        pure $ H.dfn body
+        body <- descend onlyText $ content . L.folded
+        lemma <- optText "lemma" 
+            "The optional, canonical form of a definition\
+            \ used when the term being defined is declined to fit the sentence."
+        pure $ do
+            let id = H.toValue . ("term-" <>) . toSlug $ fromMaybe body lemma
+            H.dfn (H.text body) ! A.id id
 
     reference <- rule "term reference" $ do
-        body <- descend inline $ content . L.folded
-        pure $ H.a body
-#:
+        body <- descend onlyText $ content . L.folded
+        lemma <- optText "lemma" 
+            "The optional, canonical form of a definition\
+            \ used when the term being defined is declined to fit the sentence."
+        pure $ do
+            let id = H.toValue . ("term-" <>) . toSlug $ fromMaybe body lemma
+            H.a (H.text body) ! A.href ("#" <> id) ! A.class_ "term-reference"
 
-#=haskell:
     section <- rule "section" $ do
         sTitle <- reqText "title" "The title of the section."
         sSlug  <- optText "slug" "The anchor tag associated with the section.\
@@ -191,13 +189,6 @@ With that out of the way, lets start defining custom elements for the manual.
             H.section ! A.id (H.toValue slug) $ do
                 H.h1 title
                 body
-#:
-
-#:
-
-Finally, we wrap up all of the rules we previously defined into a final rule which processes the whole #lit{Document}:
-
-#=haskell:
     rule "manual page" $ do
         title <- reqText "title" "The manual page's title."
         subtitle <- optText "subtitle" "The manual page's subtitle."
@@ -238,9 +229,6 @@ Finally, we wrap up all of the rules we previously defined into a final rule whi
                           "Copyright ©2020 to Prosidy.org. Available under the "
                           H.a "MPL v2.0" ! A.href "https://www.mozilla.org/en-US/MPL/2.0/"
                           " license."
-#:
-
-#=haskell:
 data NoteLevel = Caution | Note | WIP
   deriving Show
 
@@ -253,9 +241,6 @@ readNote unknown   = Left $ mconcat
   , show unknown
   , ". Expected 'caution', 'note', or 'wip'"
   ]
-#:
-
-#=haskell:
 compileToc :: FilePath -> [Ha.Item TocItem] -> H.Html
 compileToc currentPath = H.ol . foldMap (compileTocItem $ Just currentPath)
 
@@ -273,9 +258,6 @@ compileTocItem currentPath item =
     itemURI                     = itemPath -<.> ".html"
     itemUrl                     = Text.pack itemURI <> "#" <> slug
     isCurrent                   = Just itemPath == currentPath
-#:
-
-#=haskell:
 compileDocument :: [Ha.Item TocItem] -> Ha.Item Document -> Either ManualError H.Html
 compileDocument toc item =
     runManual (compileM (document currentPath toc) doc) >>= first CompileError
@@ -298,4 +280,3 @@ reqText = req Right
 
 optText :: (HasMetadata input, Monad context) => Key -> Text -> Desc input context (Maybe Text)
 optText = opt Right
-#:

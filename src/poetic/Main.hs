@@ -4,13 +4,14 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
-import           Prosidy hiding (NonEmpty, nonEmpty)
+import           Prosidy
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import           Control.Lens
 import qualified Data.Text.IO                  as Text.IO
 import qualified Options.Applicative as A
 import qualified Options.Applicative.Builder as AB
 import qualified System.IO as IO
+import Data.Foldable (for_)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Applicative (Alternative(..), optional)
@@ -20,13 +21,18 @@ main :: IO ()
 main = do
     options  <- getOptions
     document <- readDocument $ inputPath options
-    let lines = document ^.. allBlocks . _BlockLiteral 
-                           . filtered (optionsFilter options) 
-                           . content . _Literal
-    Text.IO.writeFile (outputPath options) . Text.unlines $
-        optionsPrefix options lines
+    let lits = document ^.. allBlocks . _BlockLiteral . spanning
+                           . filtered (optionsFilter options)
+                           . spannedContent
+    IO.withFile (outputPath options) IO.WriteMode $ \hdl ->
+        for_ lits $ \lit -> do
+            for_ (sourceLabelFor options lit) $ \label ->
+                Text.IO.hPutStrLn hdl label
+            Text.IO.hPutStrLn hdl $ lit ^. spanning . _Literal
   where
-      allBlocks = cosmosOnOf (content . folded) (_BlockTag . content . folded)
+      allBlocks = cosmosOnOf 
+            (content . folded) 
+            (_BlockTag . spanning . content . folded)
 
 data Options = Options
    { sourceLabel :: Maybe Text
@@ -76,13 +82,17 @@ getOptions = A.execParser $ A.info parse info
     readKey :: A.ReadM Key
     readKey = A.maybeReader (toKey . Text.pack)
 
-optionsPrefix :: Options -> [Text] -> [Text]
-optionsPrefix Options{sourceLabel} =
-  case sourceLabel of
-    Nothing ->
-        id
-    Just lbl ->
-        (:) (mconcat ["#line 1 \"", lbl, "\""])
+sourceLabelFor :: Options -> Spanned Literal -> Maybe Text
+sourceLabelFor Options{sourceLabel} lit = do
+    label <- sourceLabel
+    aSpan <- view spanOfMaybe lit
+    let lineNumber = spanDetail aSpan ^. spanDetailBegin . positionLine . _Line
+    pure $ mconcat 
+        [ "{-# LINE "
+        , Text.pack . show $ succ lineNumber
+        , " \""
+        , label
+        , "\" #-}"]
 
 optionsFilter :: Options -> LiteralTag -> Bool
 optionsFilter Options{tagFilter} =

@@ -16,6 +16,7 @@ import           Prosidy.Types                  ( Key
                                                 , property
                                                 , setting
                                                 )
+import Prosidy.Source (Spanned)
 
 import           Control.Monad.Morph            ( MFunctor(..) )
 import           Control.Monad.Reader           ( ReaderT(..) )
@@ -50,15 +51,6 @@ data EvalState = EvalState
     }
   deriving (Generic)
 
-wrapEvalError
-    :: Functor context
-    => Text
-    -> Eval input context output
-    -> Eval input context output
-wrapEvalError name (Eval f) =
-    Eval $ \i st -> first (mapErrors (WrappedEvalError name)) <$> f i st
-
-
 seenProperties :: L.Lens' EvalState (HashSet Key)
 seenProperties = field @"_seenProperties"
 
@@ -70,7 +62,8 @@ data EvalError =
     ParseError Key String
   | MissingRequiredSetting Key
   | NoMatches [Text]
-  | WrappedEvalError Text EvalError
+  | Wrapped Text (Spanned EvalError)
+  | CustomError Text
   deriving (Eq, Generic, Show, Hashable)
 
 evalProperty

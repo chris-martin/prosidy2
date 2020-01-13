@@ -28,3 +28,4 @@ library
                    , unordered-containers >=0.2 && <0.3
                    , profunctors >=5.3 && <5.4
                    , mmorph >=1.1 && <1.2
+                   , containers >=0.6 && <0.7

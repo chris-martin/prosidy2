@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 module Prosidy.Manual.TableOfContents where
 
-import Prosidy.Types
+import Prosidy
 import Data.Sequence (Seq)
 
 import Data.Text (Text)
@@ -44,7 +44,9 @@ foldToc 0 = const pure
 foldToc depth = content . L.folded . allSections . L.to (toTocItem depth)
   where
     allSections :: L.Fold Block (Region (Seq Block))
-    allSections = L.deepOf (_BlockTag . content . L.folded) (_BlockTag . _Tagged "section")
+    allSections = L.deepOf 
+        (_BlockTag . spanning . content . L.folded) 
+        (_BlockTag . spanning . _Tagged "section")
 
 toTocItem :: Natural -> Region (Seq Block) -> TocItem
 toTocItem depth r = TocItem navTitle slug $ r ^.. foldToc (pred depth)
