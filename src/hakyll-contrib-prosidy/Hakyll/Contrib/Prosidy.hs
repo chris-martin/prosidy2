@@ -12,13 +12,15 @@ import qualified Data.Text.Lazy                as Text.Lazy
 import           Data.Text.Lazy.Encoding        ( decodeUtf8 )
 import           Control.Monad.Error.Class      ( liftEither )
 import           Data.Bifunctor                 ( first )
-import Control.Exception (displayException)
+import           Control.Exception              ( displayException )
 
 prosidyCompiler :: Compiler (Item Document)
 prosidyCompiler = do
-    filePath <- getResourceFilePath
+    filePath     <- getResourceFilePath
     Item iid src <- getResourceText
-    doc <- liftEither . first (pure . displayException) $ parseDocument filePath src
+    doc          <- liftEither . first (pure . displayException) $ parseDocument
+        filePath
+        src
     pure $ Item iid doc
 
 getResourceText :: Compiler (Item Text)

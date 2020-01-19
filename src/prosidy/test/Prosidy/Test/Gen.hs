@@ -29,11 +29,8 @@ doc = Document <$> meta <*> Gen.seq (Range.linear 0 15) (Gen.small block)
 block :: (MonadGen m, GenBase m ~ Identity) => m Block
 block = Gen.recursive
     Gen.choice
-    [ BlockParagraph <$> paragraph
-    , BlockLiteral <$> tag literal
-    ]
-    [ BlockTag <$> (tag $ Gen.seq (Range.linear 0 15) block) 
-    ]
+    [BlockParagraph <$> paragraph, BlockLiteral <$> tag literal]
+    [BlockTag <$> (tag $ Gen.seq (Range.linear 0 15) block)]
 
 paragraph :: (MonadGen m, GenBase m ~ Identity) => m Paragraph
 paragraph = do
@@ -41,15 +38,14 @@ paragraph = do
     maybe (fail "unreachable") (pure . flip Paragraph Nothing) (nonEmpty xs)
 
 literal :: (MonadGen m, GenBase m ~ Identity) => m Literal
-literal = Literal <$> Gen.text (Range.exponential 0 15) Gen.unicode <*> pure Nothing
+literal =
+    Literal <$> Gen.text (Range.exponential 0 15) Gen.unicode <*> pure Nothing
 
 inline :: (MonadGen m, GenBase m ~ Identity) => m Inline
 inline = Gen.recursive
     Gen.choice
-    [ InlineFragment <$> fragment
-    , pure Break
-    ]
-    [ InlineTag <$> tag (Gen.seq (Range.linear 0 15) inline) ]
+    [InlineFragment <$> fragment, pure Break]
+    [InlineTag <$> tag (Gen.seq (Range.linear 0 15) inline)]
 
 key :: (MonadGen m, GenBase m ~ Identity) => m Key
 key = do
@@ -60,11 +56,7 @@ key = do
     pure . toKeyUnchecked $ Text.cons keyHead keyTail
 
 tag :: (MonadGen m, GenBase m ~ Identity) => m c -> m (Tagged c)
-tag content = Tagged 
-    <$> key 
-    <*> meta 
-    <*> Gen.small content
-    <*> pure Nothing
+tag content = Tagged <$> key <*> meta <*> Gen.small content <*> pure Nothing
 
 meta :: (MonadGen m, GenBase m ~ Identity) => m Metadata
 meta = do
@@ -84,4 +76,5 @@ literalTag :: (MonadGen m, GenBase m ~ Identity) => m LiteralTag
 literalTag = tag $ literal
 
 fragment :: (MonadGen m, GenBase m ~ Identity) => m Fragment
-fragment = Fragment <$> Gen.text (Range.exponential 1 15) Gen.unicode <*> pure Nothing
+fragment =
+    Fragment <$> Gen.text (Range.exponential 1 15) Gen.unicode <*> pure Nothing

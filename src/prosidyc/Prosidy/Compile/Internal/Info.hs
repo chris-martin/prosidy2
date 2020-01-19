@@ -11,16 +11,20 @@
 {-# LANGUAGE RankNTypes #-}
 module Prosidy.Compile.Internal.Info where
 
-import qualified Prosidy as P
+import qualified Prosidy                       as P
 
-import Data.HashMap.Strict (HashMap)
-import Type.Reflection (SomeTypeRep(..), TypeRep, Typeable, typeRep)
-import Data.Text (Text)
-import GHC.Generics (Generic)
-import Data.Hashable (Hashable)
-import Data.HashSet (HashSet)
+import           Data.HashMap.Strict            ( HashMap )
+import           Type.Reflection                ( SomeTypeRep(..)
+                                                , TypeRep
+                                                , Typeable
+                                                , typeRep
+                                                )
+import           Data.Text                      ( Text )
+import           GHC.Generics                   ( Generic )
+import           Data.Hashable                  ( Hashable )
+import           Data.HashSet                   ( HashSet )
 
-import qualified Data.Text as Text
+import qualified Data.Text                     as Text
 
 data InfoKey = InfoKey
     { inputType :: SomeTypeRep
@@ -61,16 +65,15 @@ data ProductInfo = ProductInfo
   deriving stock (Eq, Generic, Show)
   deriving anyclass (Hashable)
 
-data SumInfo = SumInfo 
+data SumInfo = SumInfo
     { key  :: InfoKey
     , info :: ProductInfo
     }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (Hashable)
 
-infoKey :: forall a. Typeable a => Text -> InfoKey
+infoKey :: forall a . Typeable a => Text -> InfoKey
 infoKey = InfoKey (SomeTypeRep (typeRep @a))
 
 displayInfoKey :: InfoKey -> String
-displayInfoKey (InfoKey ty name) = 
-    show name <> " :: " <> show ty
+displayInfoKey (InfoKey ty name) = show name <> " :: " <> show ty

@@ -4,20 +4,21 @@
 {-# LANGUAGE DeriveAnyClass, DeriveGeneric, DerivingStrategies #-}
 module Main where
 
-import Development.Shake
-import Development.Shake.FilePath
-import Data.Text (Text)
-import Control.DeepSeq (NFData(..))
-import Data.Binary (Binary(..))
-import Data.Hashable (Hashable)
-import Data.String (IsString)
-import GHC.Generics (Generic)
-import Control.Exception (displayException)
+import           Development.Shake
+import           Development.Shake.FilePath
+import           Data.Text                      ( Text )
+import           Control.DeepSeq                ( NFData(..) )
+import           Data.Binary                    ( Binary(..) )
+import           Data.Hashable                  ( Hashable )
+import           Data.String                    ( IsString )
+import           GHC.Generics                   ( Generic )
+import           Control.Exception              ( displayException )
 
-import qualified Data.ByteString.Lazy as LBS
-import qualified Prosidy as P
-import qualified Prosidy.Manual.TableOfContents as TOC
-import qualified Prosidy.Manual as Manual
+import qualified Data.ByteString.Lazy          as LBS
+import qualified Prosidy                       as P
+import qualified Prosidy.Manual.TableOfContents
+                                               as TOC
+import qualified Prosidy.Manual                as Manual
 
 main :: IO ()
 main = shakeArgs options $ do
@@ -28,13 +29,13 @@ main = shakeArgs options $ do
 
     "manual" ~> do
         pages     <- fmap prosidyToHtml <$> askOracle AllPages
-        resources <- fmap ("_out" </>)  <$> askOracle AllResources
+        resources <- fmap ("_out" </>) <$> askOracle AllResources
         let everything = pages ++ resources
         need everything
 
     "_out/doc.tar.xz" %> \path -> do
         pages     <- fmap prosidyToHtml <$> askOracle AllPages
-        resources <- fmap ("_out" </>)  <$> askOracle AllResources
+        resources <- fmap ("_out" </>) <$> askOracle AllResources
         let everything = pages ++ resources
         need everything
         command_ [] "tar" ("cfv" : path : everything)
@@ -44,12 +45,16 @@ main = shakeArgs options $ do
         toc <- askOracle TableOfContents
         doc <- askOracle $ DocumentFor src
         putInfo $ unwords ["#", "prosidy:", src, "(for " <> page <> ")"]
-        case Manual.compile Manual.document (makeRelative "_out/doc" page) toc doc of
-            Left err -> fail   $ displayException err
-            Right ok -> liftIO $ LBS.writeFile page ok
+        case
+                Manual.compile Manual.document
+                               (makeRelative "_out/doc" page)
+                               toc
+                               doc
+            of
+                Left  err -> fail $ displayException err
+                Right ok  -> liftIO $ LBS.writeFile page ok
 
-    "_out/doc/res/*" %> \path ->
-        copyFile' (dropDirectory1 path) path
+    "_out/doc/res/*" %> \path -> copyFile' (dropDirectory1 path) path
 
 options :: ShakeOptions
 options = shakeOptions
@@ -62,10 +67,7 @@ addOracles = do
 
     addOracle $ \AllPages -> do
         paths <- getDirectoryContents "doc"
-        pure 
-          . filter ((== ".pro") . takeExtension)
-          . fmap ("doc" </>)
-          $ paths
+        pure . filter ((== ".pro") . takeExtension) . fmap ("doc" </>) $ paths
 
     addOracleCache $ \(MetadataFor path) -> do
         putInfo $ "Reading metadata at " <> path
@@ -86,7 +88,8 @@ addOracles = do
         putInfo "Generating table of contents"
         pages   <- askOracle AllPages
         entries <- askOracles (fmap EntryFor pages)
-        let foldFn page = TOC.insertEntry (makeRelative "_out/doc/" $ prosidyToHtml page)
+        let foldFn page = TOC.insertEntry
+                (makeRelative "_out/doc/" $ prosidyToHtml page)
         pure . foldr (uncurry foldFn) mempty $ zip pages entries
 
     pure ()

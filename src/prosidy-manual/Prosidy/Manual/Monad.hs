@@ -4,25 +4,29 @@
 {-# LANGUAGE TupleSections #-}
 module Prosidy.Manual.Monad where
 
-import Prelude hiding (fail)
+import           Prelude                 hiding ( fail )
 
-import Control.Monad.Fail (MonadFail(..))
-import Control.Monad.Trans.Reader (ReaderT(..))
-import Control.Monad.Trans.Except (ExceptT(..))
-import Control.Monad.Trans.State.Strict (StateT(..))
-import Data.Monoid (Ap(..))
-import Data.Functor.Identity (Identity(..))
-import Control.Exception (Exception(..))
-import Numeric.Natural (Natural)
-import qualified Text.Blaze.Html5 as H
-import Data.Text (Text)
-import Data.HashSet (HashSet)
-import Prosidy.Manual.Slug (Slug, slug, slugText)
-import qualified Data.HashSet as HashSet
-import qualified Data.Text as Text
+import           Control.Monad.Fail             ( MonadFail(..) )
+import           Control.Monad.Trans.Reader     ( ReaderT(..) )
+import           Control.Monad.Trans.Except     ( ExceptT(..) )
+import           Control.Monad.Trans.State.Strict
+                                                ( StateT(..) )
+import           Data.Monoid                    ( Ap(..) )
+import           Data.Functor.Identity          ( Identity(..) )
+import           Control.Exception              ( Exception(..) )
+import           Numeric.Natural                ( Natural )
+import qualified Text.Blaze.Html5              as H
+import           Data.Text                      ( Text )
+import           Data.HashSet                   ( HashSet )
+import           Prosidy.Manual.Slug            ( Slug
+                                                , slug
+                                                , slugText
+                                                )
+import qualified Data.HashSet                  as HashSet
+import qualified Data.Text                     as Text
 
-import Prosidy.Compile (CompileError)
-import Prosidy.Manual.TableOfContents (TableOfContents)
+import           Prosidy.Compile                ( CompileError )
+import           Prosidy.Manual.TableOfContents ( TableOfContents )
 
 newtype Manual a = Manual (ManualR -> ManualS -> (Either ManualError a, ManualS))
   deriving (Functor, Applicative, Monad)
@@ -35,8 +39,8 @@ instance MonadFail Manual where
 
 runManual :: Manual a -> FilePath -> TableOfContents -> Either ManualError a
 runManual (Manual f) fp toc
-  | HashSet.null undef = result
-  | otherwise          = result *> Left (UndefinedReferences undef)
+    | HashSet.null undef = result
+    | otherwise          = result *> Left (UndefinedReferences undef)
   where
     (result, st) = f (ManualR fp 0 toc) emptyState
     undef        = HashSet.difference (references st) (definitions st)
@@ -73,8 +77,8 @@ emptyState :: ManualS
 emptyState = ManualS mempty mempty
 
 nesting :: Manual a -> Manual a
-nesting (Manual r) = Manual $ \mr ->
-    r mr { currentDepth = succ $ currentDepth mr }
+nesting (Manual r) =
+    Manual $ \mr -> r mr { currentDepth = succ $ currentDepth mr }
 
 headerTag :: Manual (H.Html -> H.Html)
 headerTag = headerTagAt <$> parameter currentDepth
@@ -93,7 +97,8 @@ define lemma = do
         lemmaSlug = slug lemma
     if HashSet.member lemmaSlug defs
         then failWith $ DuplicateDefinitions lemma
-        else setState state { definitions = HashSet.insert lemmaSlug defs } *> pure lemmaSlug
+        else setState state { definitions = HashSet.insert lemmaSlug defs }
+            *> pure lemmaSlug
 
 reference :: Text -> Manual Slug
 reference lemma = do
@@ -110,15 +115,14 @@ data ManualError =
   deriving (Show, Eq)
 
 instance Exception ManualError where
-    displayException (Fail msg) = 
-        "MonadFail: " <> msg
+    displayException (Fail         msg) = "MonadFail: " <> msg
 
-    displayException (CompileError e) = 
-        displayException e
+    displayException (CompileError e  ) = displayException e
 
     displayException (DuplicateDefinitions d) =
         "The term " <> show d <> " was defined multiple times."
 
     displayException (UndefinedReferences rs) =
-        "The following references have no corresponding definition: " <>
-        Text.unpack (Text.intercalate ", " $ slugText <$> HashSet.toList rs)
+        "The following references have no corresponding definition: "
+            <> Text.unpack
+                   (Text.intercalate ", " $ slugText <$> HashSet.toList rs)

@@ -5,14 +5,13 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TupleSections #-}
-module Prosidy.Source 
+module Prosidy.Source
     ( Source
     , sourcePath
     , sourceText
     , makeSource
     , nthLine
     , nthLineAndContext
-
     , SourceLocation
     , sourceLocationSource
     , sourceLocationOffset
@@ -24,33 +23,35 @@ module Prosidy.Source
     -- , FromSource(..)
     -- , location
     -- , _FromSource
-
     , Line(..)
     , _Line
     , Column(..)
     , _Column
     , Offset(..)
     , _Offset
-    ) where
+    )
+where
 
-import Prosidy.Internal.Optics
+import           Prosidy.Internal.Optics
 
-import Data.Foldable (foldl')
-import Data.Aeson (FromJSON(..), ToJSON(..))
-import Data.Text (Text)
-import Data.Word (Word64)
-import Data.Maybe (mapMaybe)
-import GHC.Generics (Generic)
-import Data.Hashable (Hashable(..))
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as Text
-import Data.Binary (Binary)
-import Control.DeepSeq (NFData)
+import           Data.Foldable                  ( foldl' )
+import           Data.Aeson                     ( FromJSON(..)
+                                                , ToJSON(..)
+                                                )
+import           Data.Text                      ( Text )
+import           Data.Word                      ( Word64 )
+import           Data.Maybe                     ( mapMaybe )
+import           GHC.Generics                   ( Generic )
+import           Data.Hashable                  ( Hashable(..) )
+import           Data.Map.Strict                ( Map )
+import qualified Data.Map.Strict               as Map
+import qualified Data.Text                     as Text
+import           Data.Binary                    ( Binary )
+import           Control.DeepSeq                ( NFData )
 
 -------------------------------------------------------------------------------
 data Source where
-    Source :: FilePath -> LineMap -> Text -> Source
+    Source ::FilePath -> LineMap -> Text -> Source
   deriving stock (Eq, Generic)
   deriving anyclass (Hashable, NFData, Binary)
 
@@ -58,66 +59,68 @@ instance Show Source where
     show (Source fp _ _) = "Source " <> show fp
 
 sourcePath :: Lens' Source FilePath
-sourcePath = lens get set 
+sourcePath = lens get set
   where
-    get (Source p _ _)   = p
+    get (Source p _ _) = p
     set (Source _ l t) p = Source p l t
 {-# INLINE sourcePath #-}
 
 sourceText :: Lens' Source Text
 sourceText = lens get set
   where
-    get (Source _ _ t)   = t
+    get (Source _ _ t) = t
     set (Source p l _) = Source p l
 {-# INLINE sourceText #-}
 
 makeSource :: FilePath -> Text -> Source
 makeSource fp txt = Source fp (LineMap lm) txt
   where
-    (_, _, lm) = foldl' lmFold (1, '\0', Map.singleton (Line 0) (Offset 0)) . zip [0..] $ Text.unpack txt
+    (_, _, lm) =
+        foldl' lmFold (1, '\0', Map.singleton (Line 0) (Offset 0))
+            . zip [0 ..]
+            $ Text.unpack txt
     lmFold (nth, prev, acc) (ix, ch)
-        | ch ==  '\n' && prev == '\r' =
-          (nth, ch, Map.insert (Line (pred nth)) (Offset (succ ix)) acc)
-        | ch == '\n' || ch == '\r' =
-          (succ nth, ch, Map.insert (Line nth) (Offset (succ ix)) acc)
-        | otherwise =
-          (nth, ch, acc)
+        | ch == '\n' && prev == '\r'
+        = (nth, ch, Map.insert (Line (pred nth)) (Offset (succ ix)) acc)
+        | ch == '\n' || ch == '\r'
+        = (succ nth, ch, Map.insert (Line nth) (Offset (succ ix)) acc)
+        | otherwise
+        = (nth, ch, acc)
 
 nthLine :: Line -> Source -> Maybe Text
-nthLine line (Source _ (LineMap lm) txt) =
-    case (start, end) of
-        (Nothing, Nothing) -> Nothing
-        _ -> Just
-           . maybe id Text.drop start 
-           . maybe id (Text.dropEnd . (len -) . pred) end
-           $ txt
+nthLine line (Source _ (LineMap lm) txt) = case (start, end) of
+    (Nothing, Nothing) -> Nothing
+    _ ->
+        Just
+            . maybe id Text.drop                       start
+            . maybe id (Text.dropEnd . (len -) . pred) end
+            $ txt
   where
-    len                = Text.length txt
-    start              = offsetI <$> Map.lookup line lm
-    end                = offsetI <$> Map.lookup (succ line) lm
+    len   = Text.length txt
+    start = offsetI <$> Map.lookup line lm
+    end   = offsetI <$> Map.lookup (succ line) lm
     offsetI (Offset n) = fromIntegral n :: Int
 
 nthLineAndContext :: Line -> Word64 -> Source -> [(Line, Text)]
 nthLineAndContext (Line nth) n src = do
-    let withLine x = (Line x,) <$> nthLine (Line x) src
+    let withLine x = (Line x, ) <$> nthLine (Line x) src
     mapMaybe withLine [nth - n .. nth + n]
 
 -------------------------------------------------------------------------------
 newtype LineMap where
-    LineMap :: Map Line Offset -> LineMap
+    LineMap ::Map Line Offset -> LineMap
   deriving stock (Eq, Generic)
   deriving anyclass (NFData, Binary)
   deriving newtype (Show)
 
 instance Hashable LineMap where
-    hashWithSalt salt (LineMap m) =
-        Map.foldlWithKey' 
-            (\acc k v -> acc `hashWithSalt` k `hashWithSalt` v)
-            salt
-            m
+    hashWithSalt salt (LineMap m) = Map.foldlWithKey'
+        (\acc k v -> acc `hashWithSalt` k `hashWithSalt` v)
+        salt
+        m
 -------------------------------------------------------------------------------
 data SourceLocation where
-    SourceLocation :: Source -> Offset -> ~Line -> ~Column -> SourceLocation
+    SourceLocation ::Source -> Offset -> ~Line -> ~Column -> SourceLocation
   deriving stock (Show, Generic)
   deriving anyclass (NFData, Binary)
 
@@ -163,9 +166,8 @@ sourceLocation src@(Source _ (LineMap lm) _) offset@(Offset nthChar) = do
     let column = Column $ nthChar - lOffset
     Just $ SourceLocation src offset line column
   where
-    lineFold key val Nothing
-      | val <= offset = Just (key, val)
-      | otherwise     = Nothing
+    lineFold key val Nothing | val <= offset = Just (key, val)
+                             | otherwise     = Nothing
     lineFold _ _ x = x
 
 prettySourceLocation :: SourceLocation -> String

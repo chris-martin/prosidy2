@@ -36,7 +36,8 @@ import           Data.Tagged                    ( Tagged(..) )
 type Optic' p f s a = p a (f a) -> p s (f s)
 
 type Iso' s a = forall p f . Profunctor p => Functor f => Optic' p f s a
-type Lens s t a b = forall p f . Strong p => Functor f => p a (f b) -> p s (f t)
+type Lens s t a b
+    = forall p f . Strong p => Functor f => p a (f b) -> p s (f t)
 type Lens' s a = forall p f . Strong p => Functor f => Optic' p f s a
 type Prism' s a = forall p f . Choice p => Applicative f => Optic' p f s a
 type Affine' s a

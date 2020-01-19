@@ -7,7 +7,9 @@
 {-# LANGUAGE TypeApplications #-}
 module Prosidy.Compile.Internal.Eval where
 
-import Prosidy.Compile.Internal.Info (InfoKey, displayInfoKey)
+import           Prosidy.Compile.Internal.Info  ( InfoKey
+                                                , displayInfoKey
+                                                )
 import           Prosidy.Compile.Internal.Error ( Result(Fail)
                                                 , ResultT(..)
                                                 , raiseError
@@ -21,8 +23,14 @@ import           Prosidy.Types                  ( Key
                                                 , properties
                                                 , settings
                                                 )
-import Prosidy.Source (SourceLocation, prettySourceLocation, nthLineAndContext, sourceLocationSource, sourceLocationLine, _Line)
-import Control.Exception (Exception(..))
+import           Prosidy.Source                 ( SourceLocation
+                                                , prettySourceLocation
+                                                , nthLineAndContext
+                                                , sourceLocationSource
+                                                , sourceLocationLine
+                                                , _Line
+                                                )
+import           Control.Exception              ( Exception(..) )
 
 import           Control.Monad.Morph            ( MFunctor(..) )
 import           Control.Monad.Reader           ( ReaderT(..) )
@@ -34,14 +42,14 @@ import           Data.HashSet                   ( HashSet )
 import           Data.Text                      ( Text )
 import           Data.Generics.Product          ( field )
 import           Data.Bifunctor                 ( first )
-import Data.List (intercalate)
-import qualified Data.Map as Map
+import           Data.List                      ( intercalate )
+import qualified Data.Map                      as Map
 
-import qualified Data.HashSet as HashSet
-import qualified Data.Text as Text
+import qualified Data.HashSet                  as HashSet
+import qualified Data.Text                     as Text
 import qualified Control.Lens                  as L
 import           Control.Lens.Operators
-import Control.Monad (unless)
+import           Control.Monad                  ( unless )
 
 -- | A 'Functor' describing the interpretation of 'input' into 'output' under the
 -- 'context' 'Monad'.
@@ -70,21 +78,24 @@ seenSettings = field @"_seenSettings"
 
 exhaustive :: (Applicative context, HasMetadata input) => Eval input context ()
 exhaustive = Eval $ \input state@(EvalState props sets) ->
-  let
-    missingProps = foldMap 
-        (\key -> if HashSet.member key props then mempty 
-                 else singleton $ UnknownProperty key)
-        (input ^. properties)
-    missingSettings = foldMap
-        (\key -> if HashSet.member key sets then mempty
-                 else singleton $ UnknownSetting key)
-        (input ^. settings . L.to Map.keysSet)
-    allErrors = missingProps <> missingSettings
-  in 
-    pure (
-        unless ( null missingProps && null missingSettings ) (Fail allErrors), 
-        state
-    )
+    let missingProps = foldMap
+            (\key -> if HashSet.member key props
+                then mempty
+                else singleton $ UnknownProperty key
+            )
+            (input ^. properties)
+        missingSettings = foldMap
+            (\key -> if HashSet.member key sets
+                then mempty
+                else singleton $ UnknownSetting key
+            )
+            (input ^. settings . L.to Map.keysSet)
+        allErrors = missingProps <> missingSettings
+    in  pure
+            ( unless (null missingProps && null missingSettings)
+                     (Fail allErrors)
+            , state
+            )
 
 -- | Various errors that can be raised during an evaluation.
 data EvalError =
@@ -103,39 +114,48 @@ instance Exception EvalError where
 
     displayException (MissingRequiredSetting key) =
         "Missing required setting: " <> show key
-    
-    displayException (NoMatches possibilities) = intercalate "\n"
+
+    displayException (NoMatches possibilities) = intercalate
+        "\n"
         ( "Failed to match any possible rules. The following rules were tried:"
         : (("  - " <>) . displayInfoKey <$> HashSet.toList possibilities)
         )
 
-    displayException (CustomError message) =
-        "Error: " <> Text.unpack message
+    displayException (CustomError message) = "Error: " <> Text.unpack message
 
-    displayException (WrappedEvalError key mbLoc inner@WrappedEvalError{}) = intercalate "\n"
-        [ "While processing " <> displayInfoKey key <> foldMap ((" at " <>) . prettySourceLocation) mbLoc
-        ,  displayException inner
-        ]
+    displayException (WrappedEvalError key mbLoc inner@WrappedEvalError{}) =
+        intercalate
+            "\n"
+            [ "While processing "
+            <> displayInfoKey key
+            <> foldMap ((" at " <>) . prettySourceLocation) mbLoc
+            , displayException inner
+            ]
 
     displayException (WrappedEvalError key (Just loc) inner) =
-        "While proccessing the contents of " <> displayInfoKey key 
-        <> "\n\n"
-        <> prettySourceLocation loc <> "\n\n"
-        <> (
-          let
-            showLine nth line = Text.justifyRight 4 ' ' (Text.pack $ show nth) <> " | " <> line
-          in
-            Text.unpack . Text.intercalate "\n" . fmap (uncurry showLine) $
-            nthLineAndContext (loc ^. sourceLocationLine) 3 (loc ^. sourceLocationSource)
-        ) 
-        <> "\n\n"
-        <> displayException inner
+        "While proccessing the contents of "
+            <> displayInfoKey key
+            <> "\n\n"
+            <> prettySourceLocation loc
+            <> "\n\n"
+            <> (let showLine nth line =
+                          Text.justifyRight 4 ' ' (Text.pack $ show nth)
+                              <> " | "
+                              <> line
+                in
+                    Text.unpack
+                    . Text.intercalate "\n"
+                    . fmap (uncurry showLine)
+                    $ nthLineAndContext (loc ^. sourceLocationLine)
+                                        3
+                                        (loc ^. sourceLocationSource)
+               )
+            <> "\n\n"
+            <> displayException inner
 
-    displayException (UnknownSetting k) =
-        "Unknown setting " <> show k
+    displayException (UnknownSetting  k) = "Unknown setting " <> show k
 
-    displayException (UnknownProperty k) =
-        "Unknown property " <> show k
+    displayException (UnknownProperty k) = "Unknown property " <> show k
 
 evalProperty
     :: (HasMetadata input, Monad context) => Key -> Eval input context Bool

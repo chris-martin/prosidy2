@@ -25,8 +25,8 @@ module Prosidy.Parse
 where
 
 import           Prosidy.Types
-import Prosidy.Source
-import Prosidy.Internal.Optics
+import           Prosidy.Source
+import           Prosidy.Internal.Optics
 
 import           Text.Megaparsec         hiding ( token )
 import           Text.Megaparsec.Char           ( char
@@ -43,20 +43,22 @@ import qualified Data.Text.Encoding            as Text.Encoding
 import qualified Text.Megaparsec.Char          as Megaparsec
 import qualified Data.ByteString               as ByteString
 
-import Control.Applicative (Alternative)
+import           Control.Applicative            ( Alternative )
 import           Data.Bifunctor                 ( first )
 import           Text.Megaparsec.Char.Lexer     ( hexadecimal )
 import           Data.Functor                   ( ($>) )
 import           Data.Foldable                  ( fold
                                                 , traverse_
                                                 )
-import           Control.Monad                  ( MonadPlus, void )
+import           Control.Monad                  ( MonadPlus
+                                                , void
+                                                )
 import           Data.Text                      ( Text )
 import           Data.Void                      ( Void )
 import           Control.Exception              ( Exception
                                                 , throwIO
                                                 )
-import Control.Monad.Trans.Reader (ReaderT(..))
+import           Control.Monad.Trans.Reader     ( ReaderT(..) )
 
 -------------------------------------------------------------------------------
 -- | Parses a Prosidy 'Document' from its source.
@@ -72,8 +74,8 @@ parseDocument path = runP doc . makeSource path
 readDocument :: FilePath -> IO Document
 readDocument filepath = do
     bytes <- ByteString.readFile filepath
-    either throwIO pure . parseDocument filepath $
-        Text.Encoding.decodeUtf8 bytes
+    either throwIO pure . parseDocument filepath $ Text.Encoding.decodeUtf8
+        bytes
 
 -------------------------------------------------------------------------------
 -- | Parses a Prosidy document's header 'Metadata' from source, stopping when the
@@ -90,8 +92,9 @@ parseDocumentMetadata path = runP docMetadata . makeSource path
 readDocumentMetadata :: FilePath -> IO Metadata
 readDocumentMetadata filepath = do
     bytes <- ByteString.readFile filepath
-    either throwIO pure . parseDocumentMetadata filepath $
-        Text.Encoding.decodeUtf8 bytes
+    either throwIO pure
+        . parseDocumentMetadata filepath
+        $ Text.Encoding.decodeUtf8 bytes
 
 -------------------------------------------------------------------------------
 -- | A parsing error.
@@ -110,11 +113,9 @@ newtype P a = P (ReaderT Source (Parsec Void Text) a)
 
 type MetadataItem = (Key, Maybe Text)
 
-runP :: P a -> Source -> Either Failure a 
-runP (P (ReaderT r)) src = 
-    first Failure $ parse (r src) 
-        (view sourcePath src)
-        (view sourceText src)
+runP :: P a -> Source -> Either Failure a
+runP (P (ReaderT r)) src =
+    first Failure $ parse (r src) (view sourcePath src) (view sourceText src)
 
 -------------------------------------------------------------------------------
 doc :: P Document
@@ -170,21 +171,28 @@ blockTag = do
 blockTagContents :: P (Series Block)
 blockTagContents = choice [ifBraces, ifBlock]
   where
-    ifBraces = annotateSource $ fmap 
-        (foldMap $ \x src -> Series . Seq.singleton . BlockParagraph $ Paragraph x src)
+    ifBraces = annotateSource $ fmap
+        (foldMap $ \x src ->
+            Series . Seq.singleton . BlockParagraph $ Paragraph x src
+        )
         (token tagParagraph)
-    ifBlock = Series . Seq.fromList <$> withBlockDelimiters (emptyLines *> many block)
+    ifBlock = Series . Seq.fromList <$> withBlockDelimiters
+        (emptyLines *> many block)
 
 literalTag :: P LiteralTag
 literalTag = genericTag (void $ string "#=") $ do
     close <- blockTagDelim (void $ optional_ comment *> Megaparsec.newline)
     literalBody close
-    
+
 literalBody :: P () -> P Literal
 literalBody end = annotateSource $ do
     literalLines <- manyTill literalLine (try $ skipSpaces *> end)
     emptyLines
-    pure $ Literal . Text.Lazy.toStrict . Text.Lazy.intercalate "\n" $ literalLines
+    pure
+        $ Literal
+        . Text.Lazy.toStrict
+        . Text.Lazy.intercalate "\n"
+        $ literalLines
 
 literalLine :: P Text.Lazy.Text
 literalLine = do
@@ -209,10 +217,7 @@ withBlockDelimiters parser = do
 
 -------------------------------------------------------------------------------
 inline :: P Inline
-inline = choice 
-    [ InlineTag  <$> inlineTag
-    , InlineFragment <$> fragment
-    ]
+inline = choice [InlineTag <$> inlineTag, InlineFragment <$> fragment]
 
 inlineTag :: P InlineTag
 inlineTag = genericTag sigil . option mempty $ orEmpty tagParagraph
@@ -224,8 +229,9 @@ inlineTag = genericTag sigil . option mempty $ orEmpty tagParagraph
 
 -------------------------------------------------------------------------------
 paragraph :: P Paragraph
-paragraph = annotateSource $
-    paragraphLike >>= maybe (fail "empty paragraph encountered") (pure . Paragraph)
+paragraph = annotateSource $ paragraphLike >>= maybe
+    (fail "empty paragraph encountered")
+    (pure . Paragraph)
 
 paragraphLike :: P (Maybe (NonEmpty Series Inline))
 paragraphLike = do
@@ -249,8 +255,7 @@ paragraphSpacer = try $ do
     notFollowedBy $ void (string "##") <|> void Megaparsec.newline
 
 tagParagraph :: P (Maybe (NonEmpty Series Inline))
-tagParagraph = between start end $ 
-    option Nothing paragraphLike
+tagParagraph = between start end $ option Nothing paragraphLike
   where
     start = char '{' *> skipSpaces *> optional_ endOfLine
     end   = skipSpaces *> char '}'
@@ -265,8 +270,12 @@ genericTag sigilParser bodyParser = annotateSource $ do
     pure $ Tagged thisName thisMetadata thisContent
 
 meta :: P Metadata
-meta = option mempty $ between start end $
-    foldMap itemToMetadata <$> metaItem `sepEndBy` metaSep
+meta =
+    option mempty
+        $          between start end
+        $          foldMap itemToMetadata
+        <$>        metaItem
+        `sepEndBy` metaSep
   where
     start = do
         char '['
@@ -395,7 +404,8 @@ annotateSource :: P (Maybe SourceLocation -> a) -> P a
 annotateSource (P (ReaderT r)) = P . ReaderT $ \src -> do
     offset    <- Offset . fromIntegral <$> getOffset
     result    <- r src
-    sourceLoc <- maybe (fail sourceLocationError) pure $ sourceLocation src offset
+    sourceLoc <- maybe (fail sourceLocationError) pure
+        $ sourceLocation src offset
     pure . result $ Just sourceLoc
 
 sourceLocationError :: String

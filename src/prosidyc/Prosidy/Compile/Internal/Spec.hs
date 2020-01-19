@@ -12,7 +12,10 @@
 module Prosidy.Compile.Internal.Spec where
 
 import           Prosidy.Types                  ( Key )
-import Prosidy.Compile.Internal.Info (InfoKey(..), PropertyInfo(..), SettingInfo(..))
+import           Prosidy.Compile.Internal.Info  ( InfoKey(..)
+                                                , PropertyInfo(..)
+                                                , SettingInfo(..)
+                                                )
 import           Prosidy.Compile.Internal.Util  ( setOnce
                                                 , typeOf
                                                 )

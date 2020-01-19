@@ -40,8 +40,8 @@ import           Control.Monad.Reader           ( MonadReader(..) )
 import           Control.Monad.Writer           ( MonadWriter(..) )
 import           Control.Monad.State            ( MonadState(..) )
 import           Control.Monad.Fix              ( MonadFix(..) )
-import Control.Exception (Exception(..))
-import Data.List (intercalate)
+import           Control.Exception              ( Exception(..) )
+import           Data.List                      ( intercalate )
 
 import qualified Data.HashSet                  as HashSet
 
@@ -51,13 +51,15 @@ newtype Errors e = Errors (HashSet e)
 
 instance Exception e => Exception (Errors e) where
     displayException (Errors es)
-        | errorCount == 0 = "Empty error set"
-        | errorCount == 1 = foldMap displayException es
-        | otherwise       = 
-            "Encountered " <> show errorCount <> " errors:\n===\n" <>
-            intercalate "\n---\n" (displayException <$> HashSet.toList es)
-        where
-          errorCount = HashSet.size es
+        | errorCount == 0
+        = "Empty error set"
+        | errorCount == 1
+        = foldMap displayException es
+        | otherwise
+        = "Encountered " <> show errorCount <> " errors:\n===\n" <> intercalate
+            "\n---\n"
+            (displayException <$> HashSet.toList es)
+        where errorCount = HashSet.size es
 
 data Result e a =
     Fail (Errors e)

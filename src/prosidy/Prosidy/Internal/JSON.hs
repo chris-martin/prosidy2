@@ -56,7 +56,11 @@ class Serde s where
     serde :: SerdeFinal s
 
 choice
-    :: (FromJSON a, ToJSON a) => Text -> Maybe Text -> Prism' s a -> SerdeBuild s s
+    :: (FromJSON a, ToJSON a)
+    => Text
+    -> Maybe Text
+    -> Prism' s a
+    -> SerdeBuild s s
 choice typeName subtypeName sel = SerdeBuild
     { serialize   = let chosen item =
                             single ("value" .= item)
@@ -85,9 +89,10 @@ noMatch :: String -> SerdeBuild s a
 noMatch msg = SerdeBuild mempty (const $ fail msg)
 
 field :: (FromJSON a, ToJSON a) => Text -> Lens' s a -> SerdeBuild s a
-field name sel = SerdeBuild { serialize   = \item -> single $ name .= view sel item
-                            , deserialize = \obj -> obj .: name
-                            }
+field name sel = SerdeBuild
+    { serialize   = \item -> single $ name .= view sel item
+    , deserialize = \obj -> obj .: name
+    }
 
 data SerdeFinal t = SerdeFinal
     { serdeToEncoding    :: t -> Encoding
@@ -95,19 +100,18 @@ data SerdeFinal t = SerdeFinal
     , serdeParseJSON     :: Value -> Parser t
     }
 
-finalizeSerde :: forall t. Typeable t => SerdeBuild t t -> SerdeFinal t
+finalizeSerde :: forall t . Typeable t => SerdeBuild t t -> SerdeFinal t
 finalizeSerde (SerdeBuild s d) = SerdeFinal
-    { serdeToEncoding  = Aeson.pairs . mconcat . flip appEndo [] . s
-    , serdeToJSON      = Aeson.object . flip appEndo [] . s
-    , serdeParseJSON   = Aeson.withObject (show $ typeRep @t) d
+    { serdeToEncoding = Aeson.pairs . mconcat . flip appEndo [] . s
+    , serdeToJSON     = Aeson.object . flip appEndo [] . s
+    , serdeParseJSON  = Aeson.withObject (show $ typeRep @t) d
     }
 
 wrapper :: (FromJSON u, ToJSON u) => (t -> u) -> (u -> t) -> SerdeFinal t
-wrapper to fro = SerdeFinal
-    { serdeToEncoding = toEncoding . to
-    , serdeToJSON     = toJSON . to
-    , serdeParseJSON  = fmap fro . parseJSON
-    }
+wrapper to fro = SerdeFinal { serdeToEncoding = toEncoding . to
+                            , serdeToJSON     = toJSON . to
+                            , serdeParseJSON  = fmap fro . parseJSON
+                            }
 
 data SerdeBuild t a = SerdeBuild
     { serialize   :: forall kv. Aeson.KeyValue kv => t -> Endo [kv]
@@ -127,13 +131,15 @@ instance Typeable s => Alternative (SerdeBuild s) where
 instance Applicative (SerdeBuild s) where
     pure x = SerdeBuild mempty (const $ pure x)
 
-    SerdeBuild s1 d1 <*> SerdeBuild s2 d2 = SerdeBuild (s1 <> s2) (\o -> d1 o <*> d2 o)
+    SerdeBuild s1 d1 <*> SerdeBuild s2 d2 =
+        SerdeBuild (s1 <> s2) (\o -> d1 o <*> d2 o)
 
 instance Functor (SerdeBuild s) where
     fmap = dimap id
 
 instance Profunctor SerdeBuild where
-    dimap lhs rhs (SerdeBuild ser deser) = SerdeBuild (ser . lhs) (fmap rhs . deser)
+    dimap lhs rhs (SerdeBuild ser deser) =
+        SerdeBuild (ser . lhs) (fmap rhs . deser)
 
 single :: a -> Endo [a]
 single = Endo . (:)
