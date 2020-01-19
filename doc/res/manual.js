@@ -1,10 +1,13 @@
 class CalculateViewing {
     constructor() {
         this.main = document.querySelector('main');
-        this.sections = document.querySelectorAll('main section');
-        this.currentLinks = document.querySelectorAll('nav li.current a')
+        this.sections = document.querySelectorAll('main > section, main > section > section');
+        this.currentLinks = document.querySelectorAll('nav > ol > li.current a')
+        this.parents = document.querySelectorAll('nav > ol > li, nav > ol > li > ol > li')
         this.update();
+        window.currentLinks = this.currentLinks
     }
+
 
     update() {
         if (!this.currentLinks) return;
@@ -16,6 +19,13 @@ class CalculateViewing {
         }
         for (const link of this.currentLinks) {
             if (viewing === link.dataset.target) {
+                for (const li of this.parents) {
+                    if (li.contains(link)) {
+                        li.classList.add('viewing-child');
+                    } else {
+                        li.classList.remove('viewing-child');
+                    }
+                }
                 link.classList.add('viewing');
             } else {
                 link.classList.remove('viewing');

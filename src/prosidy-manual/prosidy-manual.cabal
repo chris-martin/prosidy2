@@ -15,34 +15,46 @@ build-type:            Simple
 executable prosidy-manual
   hs-source-dirs:        .
   default-language:      Haskell2010
-  ghc-options:           -pgmL poetic
 
   main-is:               Main.hs
 
   other-modules:         Prosidy.Manual
                        , Prosidy.Manual.Monad
+                       , Prosidy.Manual.Slug
                        , Prosidy.Manual.TableOfContents
 
-  build-tool-depends:    poetic:poetic
 
   build-depends:         base >= 4.7 && < 5
                        , prosidy
                        , prosidyc
-                       , hakyll-contrib-prosidy
+                       , binary >=0.8 && <0.9
+                       , deepseq >=1.4 && <1.5
+                       , lens >=4.17 && <4.18
+                       , shake >=0.18 && <0.19
+                       , text >=1.2 && <1.3
+                       , containers >=0.6 && <0.7
+                       , unordered-containers >=0.2 && <0.3
+                       , vector >=0.12 && <0.13
+                       , hashable >= 1.2 && <1.4
+                       , transformers >= 0.5 && <0.6
 
-                       , hakyll
-                       , mtl
-                       , text
-                       , lens
+                       , bytestring
                        , blaze-markup
                        , blaze-html
-                       , unordered-containers
-                       , containers
-                       , generic-lens
-                       , directory
-                       , filepath
-                       , bytestring
-                       , mmorph
-                       , binary
-                       , bytestring
+
+                      --  , hakyll
+                      --  , mtl
+                      --  , text
+                      --  , lens
+                      --  , blaze-markup
+                      --  , blaze-html
+                      --  , unordered-containers
+                      --  , containers
+                      --  , generic-lens
+                      --  , directory
+                      --  , filepath
+                      --  , bytestring
+                      --  , mmorph
+                      --  , binary
+                      --  , bytestring
 

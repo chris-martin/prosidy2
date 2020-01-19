@@ -21,18 +21,18 @@ main :: IO ()
 main = do
     options  <- getOptions
     document <- readDocument $ inputPath options
-    let lits = document ^.. allBlocks . _BlockLiteral . spanning
+    let lits = document ^.. allBlocks . _BlockLiteral
                            . filtered (optionsFilter options)
-                           . spannedContent
+                           . content
     IO.withFile (outputPath options) IO.WriteMode $ \hdl ->
         for_ lits $ \lit -> do
             for_ (sourceLabelFor options lit) $ \label ->
                 Text.IO.hPutStrLn hdl label
-            Text.IO.hPutStrLn hdl $ lit ^. spanning . _Literal
+            Text.IO.hPutStrLn hdl $ lit ^. content
   where
       allBlocks = cosmosOnOf 
             (content . folded) 
-            (_BlockTag . spanning . content . folded)
+            (_BlockTag . content . folded)
 
 data Options = Options
    { sourceLabel :: Maybe Text
@@ -82,17 +82,17 @@ getOptions = A.execParser $ A.info parse info
     readKey :: A.ReadM Key
     readKey = A.maybeReader (toKey . Text.pack)
 
-sourceLabelFor :: Options -> Spanned Literal -> Maybe Text
+sourceLabelFor :: Options -> Literal -> Maybe Text
 sourceLabelFor Options{sourceLabel} lit = do
     label <- sourceLabel
-    aSpan <- view spanOfMaybe lit
-    let lineNumber = spanDetail aSpan ^. spanDetailBegin . positionLine . _Line
+    lineNumber <- lit ^? location . sourceLocationLine
     pure $ mconcat 
         [ "{-# LINE "
-        , Text.pack . show $ succ lineNumber
+        , Text.pack $ show lineNumber
         , " \""
         , label
-        , "\" #-}"]
+        , "\" #-}"
+        ]
 
 optionsFilter :: Options -> LiteralTag -> Bool
 optionsFilter Options{tagFilter} =

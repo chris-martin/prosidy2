@@ -6,7 +6,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StrictData #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Prosidy.Compile.Internal.Error
     ( Result(..)
@@ -19,6 +18,7 @@ module Prosidy.Compile.Internal.Error
     , foldResult
     , mapErrors
     , eachError
+    , singleton
     , MonadResult(..)
       -- * Re-exports
     , Hashable
@@ -40,12 +40,24 @@ import           Control.Monad.Reader           ( MonadReader(..) )
 import           Control.Monad.Writer           ( MonadWriter(..) )
 import           Control.Monad.State            ( MonadState(..) )
 import           Control.Monad.Fix              ( MonadFix(..) )
+import Control.Exception (Exception(..))
+import Data.List (intercalate)
 
 import qualified Data.HashSet                  as HashSet
 
 newtype Errors e = Errors (HashSet e)
   deriving stock (Show, Eq, Generic)
   deriving newtype (Foldable, Monoid, Semigroup)
+
+instance Exception e => Exception (Errors e) where
+    displayException (Errors es)
+        | errorCount == 0 = "Empty error set"
+        | errorCount == 1 = foldMap displayException es
+        | otherwise       = 
+            "Encountered " <> show errorCount <> " errors:\n===\n" <>
+            intercalate "\n---\n" (displayException <$> HashSet.toList es)
+        where
+          errorCount = HashSet.size es
 
 data Result e a =
     Fail (Errors e)
@@ -197,6 +209,9 @@ resultM f r = ResultT $ do
         Fail es -> pure $ Fail es
         Ok   x  -> runResultT . lift . f $ pure x
 {-# INLINE resultM #-}
+
+singleton :: (Hashable e) => e -> Errors e
+singleton = Errors . HashSet.singleton
 
 eachError
     :: (Hashable e, Hashable e', Eq e') => (e -> e') -> Errors e -> Errors e'

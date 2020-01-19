@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecursiveDo #-}
@@ -10,7 +11,7 @@ module Main
 where
 
 import           Prosidy
-import           Prosidy.Compile
+import qualified Prosidy.Compile as C
 
 import Data.Maybe (fromMaybe)
 import Data.Functor.Identity (Identity)
@@ -32,6 +33,9 @@ import qualified Control.Lens                  as L
 import Control.Lens.Operators
 import qualified Text.Blaze.Html5              as H
 import qualified Text.Blaze.Html5.Attributes   as A
+import Control.Monad.Trans.Reader (ReaderT(..), Reader, runReader, asks)
+import System.Exit (exitFailure)
+import Control.Exception (displayException)
 
 main :: IO ()
 main = do
@@ -39,8 +43,10 @@ main = do
     input <- withFile' IO.stdin inputFile IO.ReadMode Text.IO.hGetContents
     document <- either throwIO pure
         $ parseDocument (fromMaybe "<stdin>" inputFile) input
-    case compile (compiler standalone breakUsing) document of
-        Left  err  -> fail $ show err
+    case runReader (C.compileM documentC document) (ManualState standalone breakUsing) of
+        Left  err  -> do
+            IO.hPutStrLn IO.stderr $ displayException err
+            exitFailure
         Right html -> do
             withFile' IO.stdout outputFile IO.WriteMode $ \handle ->
                 Text.IO.hPutStrLn handle . toStrict . renderHtml $ html
@@ -50,151 +56,218 @@ withFile'
 withFile' hdl path mode =
     bracket (maybe (pure hdl) (`IO.openFile` mode) path) IO.hClose
 
-compileBlockTag :: Item (Spanned Paragraph) Identity H.Html -> Item Block Identity H.Html -> ProductT (Spanned BlockTag) Identity H.Html
-compileBlockTag paragraph block = do
-    textOnly <- blockRule "text only block"
-        paragraph
-        (disallow "literal tags not allowed in this context")
-        (disallow "nested block tags are not allowed in this context")
+type Product i = C.Product i (Reader ManualState) H.Html
+type Sum     i = C.Sum     i (Reader ManualState) H.Html
 
-    heading <- tagRule "h" "first-level heading" $
-        H.h2 <$> children textOnly
+data ManualState = ManualState Bool Text
 
-    subheading <- tagRule "h+" "second-level heading" $ do
-        H.h3 <$> children textOnly
+isStandalone :: Reader ManualState Bool
+isStandalone = asks $ \(ManualState x _) -> x
 
-    subsubheading <- tagRule "h++" "third-level heading" $ do
-        H.h4 <$> children textOnly
+breakSeparator :: Reader ManualState Text
+breakSeparator = asks $ \(ManualState _ x) -> x
 
-    blockImage <- tagRule "image" "block image with optional caption" $ do
-        url   <- req Right "url" "The URL of the image to embed."
-        title <- opt Right "title" "The title/alt-text of the image."
-        body  <- children textOnly
-        pure $ do
-            H.figure $ do
-                H.img
-                    ! A.src (H.toValue url)
-                    ! foldMap (A.title . H.toValue) title
-                H.figcaption body
+documentC :: Product Document
+documentC = mdo
+    blockTag   <- blockTagC block paragraph
+    inlineTag  <- inlineTagC inline
+    literalTag <- literalTagC
 
-    blockQuote <- tagRule "quote" "a blockquote" $ do
-        body <- children block
-        pure $ H.blockquote body
+    block <- C.block "block context"
+        "Top level block items."
+        blockTag literalTag paragraph
 
-    list <- compileList block
+    inline <- C.inline "inline context"
+        "Primary content."
+        inlineTag text break
 
-    tags "block tags" 
-        [ heading
-        , subheading
-        , subsubheading
+    paragraph <- C.paragraph "paragraph"
+        "Primary content, grouped by paragraph."
+        do
+            content <- C.children inline
+            pure $ H.p content
+
+    break <- C.break "space" 
+        "One-character space." 
+        (H.text <$> breakSeparator)
+
+    text <- C.fragment "text"
+        "Textual data."
+        (pure . H.text)
+
+    C.document do
+        standalone <- C.embed isStandalone
+        title <- C.reqText "title"
+            "The document's title; inserted as the first header in a document."
+        style <- C.optText "style"
+            "An optional stylesheet attached to the document.\
+            \ Ignored when not generating a standalone document."
+        content <- C.children block
+        pure if
+          | standalone ->
+            H.html do
+                H.head $ do
+                    H.title $ H.text title
+                    for_ style $ \url ->
+                        H.link 
+                            ! A.rel "stylesheet"
+                            ! A.type_ "text/css"
+                            ! A.href (H.toValue url)
+                    H.body $ do
+                        H.header . H.h1 $ H.text title
+                        H.main content
+          | otherwise -> do
+            H.h1 $ H.text title
+            content 
+
+blockTagC :: C.ProductRule Block (Reader ManualState) H.Html 
+    -> C.ProductRule Paragraph (Reader ManualState) H.Html 
+    -> Product (BlockTag)
+blockTagC blockRule paragraphRule = do
+    list <- listC blockRule
+
+    textOnly <- C.block "text-only"
+        "A block which can only contain inline items."
+        (C.disallow "Block tags are not allowed in a text-only tag.")
+        (C.disallow "Literal tags are not allowed in a text-only tag.")
+        paragraphRule
+
+    heading1 <- C.tag "h" 
+        "top-level heading" 
+        (H.h2 <$> C.children textOnly)
+
+    heading2 <- C.tag "h+" 
+        "second-level heading" 
+        (H.h3 <$> C.children textOnly)
+
+    heading3 <- C.tag "h++" 
+        "third-level heading" 
+        (H.h4 <$> C.children textOnly)
+
+    image <- C.tag "image"
+        "An image containing a capture, outside of the flow of text."
+        do
+            imgHtml <- imageDesc
+            content <- C.children textOnly
+            pure $ H.figure do
+                imgHtml
+                H.figcaption content
+
+    quote <- C.tag "quote"
+        "A block quotation."
+        do
+            content <- C.children blockRule
+            pure $ H.blockquote content    
+
+    C.oneOf "block tag"
+        "Top-level block tags."
+        [ heading1
+        , heading2
+        , heading3
+        , image
         , list
-        , blockImage
-        , blockQuote
+        , quote
         ]
 
-compileList :: Item Block Identity H.Html -> SumT (Spanned BlockTag) Identity H.Html
-compileList block = do
-    item <- tagRule "item" "A single item within a list." $ do
-        content <- children block
-        pure $ H.li content
+inlineTagC :: C.ProductRule Inline (Reader ManualState) H.Html -> Product (InlineTag)
+inlineTagC inlineRule = do
+    bold <- C.tag "b"
+        "Bold text."
+        do
+            content <- C.children inlineRule
+            pure $ H.strong content
 
-    onlyItems <- tags "inside of a list" [item]
+    image <- C.tag "image"
+        "An inline image."
+        imageDesc
 
-    insideList <- blockRule "inside of a list"
-        (disallow "paragraphs are not permitted in this context")
-        (disallow "literal blocks are not permitted in this context")
-        onlyItems
+    italic <- C.tag "i"
+        "Italic text."
+        do
+            content <- C.children inlineRule
+            pure $ H.em content
 
-    tagRule "list" "A listing. All children must be 'item' block tags." $ do
-        isOrdered <- prop "ord" "If provided, the list is numerically ordered."
-        content   <- children insideList
-        pure $ (if isOrdered then H.ol else H.ul) content
+    link <- C.tag "link"
+        "Hyperlink to an external document."
+        do
+            url   <- C.reqText "url" "The destination URL of the hyperlink."
+            title <- C.optText "title" "The link's title. Shown on mouseover in most browsers."
+            content <- C.children inlineRule
+            pure $ H.a content
+                ! A.href (H.toValue url)
+                ! foldMap (A.title . H.toValue) title
 
-compileInlineTag :: Item Inline Identity H.Html -> ProductT (Spanned InlineTag) Identity H.Html
-compileInlineTag inline = do
-    image <- tagRule "image" "images, inline with text" $ do
-        url   <- req Right "url"   "The URL of the image to embed."
-        title <- opt Right "title" "The title/alt-text of the image."
-        pure $ do
-            H.img ! A.src (H.toValue url) ! foldMap (A.title . H.toValue) title
+    lit <- C.tag "lit"
+        "Literal text."
+        do
+            content <- C.children inlineRule
+            pure $ H.code content
 
-    bold <- tagRule "b" "bold text" $ do
-        H.strong <$> children inline 
-
-    italic <- tagRule "i" "italic text" $ do
-        H.em <$> children inline
-
-    literal <- tagRule "lit" "inline literal text" $ do
-        H.code <$> children inline
-
-    link <- tagRule "link" "hyperlinks" $ do
-        url     <- req Right "url" "The destination URL."
-        content <- children inline
-        pure $ H.a content ! A.href (H.toValue url)
-
-    tags "inline tags"
+    C.oneOf "inline tag"
+        "Top-level inline tags."
         [ bold
         , image
         , italic
-        , literal
         , link
+        , lit
         ]
 
-compileLiteralTag :: ProductT (Spanned LiteralTag) Identity H.Html
-compileLiteralTag = do
-    literalText <- rule "literal-text" "text inside of a literal tag" $ do
-        content <- self
-        pure $ H.text (content ^. _Literal)
+literalTagC :: Product (LiteralTag)
+literalTagC = do
+    literal <- C.literal "code literal"
+        "Embedded source code."
+        (pure . H.code . H.text)
 
-    code <- tagRule "code" "embedded source code" $ do
-        content <- child literalText
-        pure $
-            H.pre . H.code $ content
+    src <- C.tag "src"
+        "Embedded source code. "
+        do
+            lang <- C.optText "lang"
+                "The language of the source code."
+            content <- C.child literal
+            pure do
+                H.pre do
+                    let attrs = foldMap (A.class_  . H.toValue) lang
+                    H.code content ! attrs
 
-    tags "literal tags"
-        [ code
+    C.oneOf "literal tag"
+        "Top-level literal tags."
+        [ src
         ]
 
-compiler :: Bool -> Text -> ProductT Document Identity H.Html
-compiler standalone space = mdo
-    block <- blockRule "top-level block items"
-        paragraph
-        literalTag
-        blockTag
+listC :: C.ProductRule Block (Reader ManualState) H.Html -> Sum (BlockTag)
+listC blockRule = do
+    item <- C.tag "item"
+        "A single item in a list."
+        do
+            content <- C.children blockRule
+            pure $ H.li content
 
-    inline <- inlineRule "top-level inline items" 
-        (pure " ")
-        (pure . H.text)
-        inlineTag
+    listTag <- C.oneOf "list block tag"
+        "Block tags allowed inside of a list. Hint: it's only item."
+        [item]
+    
+    listBlock <- C.block "list block"
+        "A special block-context for the inside of lists."
+        listTag
+        (C.disallow "Literals are not allowed inside of lists.")
+        (C.disallow "Paragraphs are not allowed inside of lists.")
 
-    paragraph  <- paragraphRule inline (pure . H.p)
-    inlineTag  <- compileInlineTag inline
-    blockTag   <- compileBlockTag paragraph block
-    literalTag <- compileLiteralTag
+    C.tag "list" 
+        "A list of items."
+        do
+            isOrdered <- C.prop "ord" "If provided, the items in the list are ordered."
+            content   <- C.children listBlock
+            pure $ (if isOrdered then H.ol else H.ul) content
 
-    documentRule $ do
-        content    <- children block
-        title      <- req Right "title" "The document's title, used in the header."
-        maybeStyle <- if 
-          | standalone -> opt Right "style" "A stylesheet to attach to the document."
-          | otherwise  -> pure Nothing
-        pure $ do
-            let titleHtml = H.text title
-            if 
-              | standalone -> do
-                H.html $ do
-                    H.head $ do
-                        H.title titleHtml
-                        for_ maybeStyle $ \style ->
-                            H.link ! A.rel "stylesheet"
-                                   ! A.type_ "text/css"
-                                   ! A.href (H.toValue style)
-                    H.body $ do
-                        H.header $ H.h1 titleHtml
-                        H.main content
-              | otherwise -> do
-                H.h1 titleHtml
-                content 
+imageDesc :: (HasMetadata input, Monad context) => C.Desc input context H.Html
+imageDesc = do
+    url   <- C.reqText "url"   "The URL of the image to display."
+    desc  <- C.optText "desc"  "A description of the image; shown when the image cannot be displayed."
+    title <- C.optText "title" "The image's title. Shown on mouseover in most browsers."
+    pure $ H.img 
+        ! A.href (H.toValue url)
+        ! foldMap (A.alt . H.toValue) desc
+        ! foldMap (A.title . H.toValue) title
 
 data Opts = Opts
     { breakUsing :: Text
@@ -241,3 +314,4 @@ getOpts = execParser $ info optParse optInfo
         pure Opts { .. }
 
     optInfo = mconcat []
+

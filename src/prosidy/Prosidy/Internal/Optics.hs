@@ -12,11 +12,13 @@ module Prosidy.Internal.Optics
     , lens
     , prism
     , affine
+    , nullAffine
     , view
     , views
     , preview
     , review
     , over
+    , assign
     )
 where
 
@@ -67,6 +69,10 @@ affine get set = dimap lhs rhs . right' . second'
     rhs (Right (x, f)) = set x <$> f
 {-# INLINE affine #-}
 
+nullAffine :: Affine' s a
+nullAffine = affine (const Nothing) const
+{-# INLINE nullAffine #-}
+
 view :: Lens' s a -> s -> a
 view f = getConst . f Const
 {-# INLINE view #-}
@@ -75,13 +81,17 @@ views :: Traversal' s a -> s -> [a]
 views f = flip appEndo [] . getConst . f (Const . Endo . (:))
 {-# INLINE views #-}
 
-preview :: Prism' s a -> s -> Maybe a
+preview :: Optic' (->) (Const (First a)) s a -> s -> Maybe a
 preview f = getFirst . getConst . f (Const . First . Just)
 {-# INLINE preview #-}
 
-over :: Traversal' s a -> (a -> a) -> s -> s
+over :: Optic' (->) Identity s a -> (a -> a) -> s -> s
 over t f = runIdentity . t (Identity . f)
 {-# INLINE over #-}
+
+assign :: Optic' (->) Identity s a -> a -> s -> s
+assign t = over t . const
+{-# INLINE assign #-}
 
 review :: Prism' s a -> a -> s
 review p = runIdentity . unTagged . p . Tagged . Identity

@@ -4,279 +4,302 @@
 {-# LANGUAGE RecursiveDo       #-}
 {-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE TypeFamilies      #-}
-module Prosidy.Manual
-    ( compileDocument
-    , compileToc
-    , ManualError(..)
-    ) where
+module Prosidy.Manual where
+
+import Text.Blaze.Html5 ((!))
 import Prosidy
-import Prosidy.Compile
 import Prosidy.Manual.Monad
-import Prosidy.Manual.TableOfContents
-
-import Data.Tuple (swap)
-import Data.Functor (($>))
-import Data.Bifunctor      (Bifunctor(..))
-import Data.Text           (Text)
-import Data.Sequence       (Seq)
-import Data.Foldable       (for_, traverse_)
-import Text.Blaze.Html5    ((!))
-import Text.Read           (readEither)
-import Type.Reflection     (Typeable)
-import Control.Monad (unless, when)
-import Control.Monad.Morph (MFunctor(hoist))
+import Prosidy.Manual.Slug (slug)
 import Control.Lens.Operators
-import Data.Traversable (sequenceA)
-import System.FilePath((-<.>))
+
+import qualified Prosidy.Manual.TableOfContents as TOC
+import qualified Prosidy.Manual.Slug as Slug
+import Data.Foldable (for_)
+
 import Data.Maybe (fromMaybe)
-import Data.Text.Encoding (encodeUtf8)
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as HA
+import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
+import qualified Prosidy.Compile as C
+import qualified Data.ByteString.Lazy as LBS
+import Control.Monad (when, unless)
+import qualified Data.Text as Text
+import qualified Data.Char as Char
+import qualified Data.Map.Strict as Map
+import Numeric.Natural (Natural)
 
-import qualified Hakyll as Ha (Item, Identifier, toFilePath, itemIdentifier, itemBody)
+import Debug.Trace
 
-import qualified Control.Lens                as L
-import qualified Data.Text                   as Text
-import qualified Data.ByteString             as BS
-import qualified Data.Char                   as Char
-import qualified Text.Blaze.Html5            as H
-import qualified Text.Blaze.Html5.Attributes as A
+type Html a = C.Product a Manual H.Html
 
-type Html input = RuleT input Manual H.Html
+compile :: Html a -> FilePath -> TOC.TableOfContents -> a -> Either ManualError LBS.ByteString
+compile h fp toc input = do
+    result <- runManual (C.compileM h input) fp toc
+    case result of
+        Left err -> Left  $ CompileError err
+        Right ok -> Right $ renderHtml ok
+        
+document :: Html Document
+document = mdo
+    blockRule <- C.block "block" 
+        "Top-level block items."
+        blockTagRule literalTagRule paragraphRule
 
-document :: FilePath -> [Ha.Item TocItem] -> Html Document
-document currentPath toc = mdo
-    plainTextText <- rule "plain text (as text)" $ self
-    plainText     <- rule "plain text" $ fmap H.text self
-    breakText <- rule "break (text)" $ pure (" " :: Text)
-    break     <- rule "break" $ pure $ H.text " "
-    block <- choose "block context"
-        [ _BlockParagraph . spanning @? paragraph
-        , _BlockTag . spanning @? blockTag
-        ]
+    blockTagRule <- blockTag blockRule paragraphRule
 
-    inline <- choose "inline context"
-        [ _Break @? break
-        , _InlineTag . spanning @? inlineTag
-        , _InlineText . spanning @? plainText
-        ]
+    inlineRule <- C.inline "inline" "Top-level inline items."
+        inlineTagRule fragmentRule breakRule
 
-    onlyText <- choose "inline context (only text)"
-        [ _Break @? breakText
-        , _InlineText . spanning  @? plainTextText
-        ]
+    inlineTagRule <- inlineTag inlineRule
 
-    paragraph <- rule "paragraph" $ do
-        body <- descend inline $ _Paragraph . L.folded
-        pure $ H.p body
+    literalTagRule <- literalTag
 
-    blockTag <- choose "block tag"
-        [ _Tagged "section" @? section
-        , _Tagged "note" @? note
-        , _Tagged "list" @? list
-        ]
+    paragraphRule <- C.paragraph "paragraph" 
+        "Paragraph consisting of inline items." $ do
+            body <- C.children inlineRule
+            pure $ H.p body
 
-    inlineTag <- choose "inline tag"
-        [ _Tagged "b" @? bold
-        , _Tagged "i" @? italics
-        , _Tagged "chars" @? chars
-        , _Tagged "lit" @? inlineLiteral
-        , _Tagged "def" @? definition
-        , _Tagged "term" @? reference
-        , _Tagged "link" @? link
-        ]
+    fragmentRule <- C.fragment "plain text" 
+        "Plain, unmodified textual content." 
+        (pure . H.text)
 
-    bold <- rule "boldface" $ do
-        body <- descend inline $ content . L.folded
-        pure $ H.strong body
+    breakRule <- C.break "break" 
+        "Single spaces between lines." 
+        (pure " ")
 
-    italics <- rule "italics" $ do
-        body <- descend inline $ content . L.folded
-        pure $ H.em body
+    C.document $ do
+        title    <- C.reqText          "title"     "This manual page's title." 
+        subtitle <- C.optText          "subtitle"  "This manual page's subtitle."
+        revision <- C.optText          "revision"  "The version of this page in the manual."
+        created  <- C.optText          "created"   "The date this manual page was initially created."
+        updated  <- C.optText          "updated"   "The date this manual page was last updated."
+        lang     <- C.optText          "lang"      "The language of this page."
+        noToc    <- C.prop             "no-toc"    "Do not show the table of contents on this page."
 
-    inlineLiteral <- rule "inline literal" $ do
-        body <- descend inline $ content . L.folded
-        pure $ H.code body
+        _        <- C.optText          "toc-title" "The title as it appears in the table of contents."
+        _        <- C.prop             "hidden"    "Hide this document from the table of contents entirely."
+        _        <- C.opt     @Integer "priority"  "The sort order in the table of contents. Higher goes first."
 
-    listItemBody <- rule "list item body" $ do
-        body <- descend block $ content . L.folded
-        pure $ H.li body
-
-    listItem <- choose "list item" 
-        [ _BlockTag . spanning . _Tagged "item" @? listItemBody
-        ]
-
-    list <- rule "list" $ do
-        body <- descend listItem $ content . L.folded
-        pure $ H.ul body
-
-    chars <- rule "chars" $ do
-        noEscape <- prop "no-escape" "Do not escape the `rep` setting."
-        rep      <- reqText "rep" "The literal representation of the inner text."
-        text     <- descend onlyText $ content . L.folded
-        pure $ do
-            let pickHex  = (!!) "0123456789ABCDEF" . fromIntegral
-                toHex 0 acc = acc
-                toHex n acc = uncurry toHex
-                    . second ((: acc) . pickHex)
-                    $ n `quotRem` 16
-            H.span ! A.class_ "char-sequence" $ do
-                H.text text
-                " ("
-                H.code ! A.class_ "char-sequence-literal" $
-                    foldMap (H.span . H.toHtml) $ 
-                        if noEscape 
-                        then Text.unpack rep
-                        else foldMap Char.showLitChar (Text.unpack rep) ""
-                "; "
-                H.code ! A.class_ "char-sequence-utf-8" $ do
-                    for_ (Text.unpack rep) $ \ch -> H.span $
-                        H.toHtml . foldr toHex [] . BS.unpack . encodeUtf8 $ 
-                            Text.singleton ch
-                ")"
-    note <- rule "note" $ do
-      level <- req readNote "level"
-        "The level of the note. Can be 'caution', 'note', or 'wip'"
-      body <- descend block $ content . L.folded
-      pure $ do
-        let levelHtml = case level of
-              Caution -> "caution"
-              Note    -> "note"
-              WIP     -> "wip"
-        H.aside ! A.class_ levelHtml $ do
-          body
-
-    link <- rule "link" $ do
-      url <- reqText "url" "The URL to link to."
-      external <- prop "external" "If provided, open links in a new window."
-      body <- descend inline $ content . L.folded
-      pure $ do
-        H.a ! A.href (H.toValue url)
-            ! (if external then A.target "blank" else mempty)
-            $ body
-
-    definition <- rule "term definition" $ do
-        body <- descend onlyText $ content . L.folded
-        lemma <- optText "lemma" 
-            "The optional, canonical form of a definition\
-            \ used when the term being defined is declined to fit the sentence."
-        pure $ do
-            let id = H.toValue . ("term-" <>) . toSlug $ fromMaybe body lemma
-            H.dfn (H.text body) ! A.id id
-
-    reference <- rule "term reference" $ do
-        body <- descend onlyText $ content . L.folded
-        lemma <- optText "lemma" 
-            "The optional, canonical form of a definition\
-            \ used when the term being defined is declined to fit the sentence."
-        pure $ do
-            let id = H.toValue . ("term-" <>) . toSlug $ fromMaybe body lemma
-            H.a (H.text body) ! A.href ("#" <> id) ! A.class_ "term-reference"
-
-    section <- rule "section" $ do
-        sTitle <- reqText "title" "The title of the section."
-        sSlug  <- optText "slug" "The anchor tag associated with the section.\
-            \ If not provided, one will be generated based on the title.\
-            \ Generally, providing a slug is better as it allows the section's\
-            \ name to be changed without breaking permalinks."
-
-        hTag <- embed headerTag
-
-        body  <- descend (hoist nestSection block) $
-            content . L.folded
+        body <- C.children blockRule
+        tocHtml <- C.embed $ do
+            params <- parameters
+            pure $ toc (currentPath params) (tableOfContents params)
 
         pure $ do
-            let title = H.text sTitle
-            let slug  = fromMaybe (toSlug sTitle) sSlug
-            H.section ! A.id (H.toValue slug) $ do
-                H.h1 title
-                body
-    rule "manual page" $ do
-        title <- reqText "title" "The manual page's title."
-        subtitle <- optText "subtitle" "The manual page's subtitle."
-        _ <- optText "nav-title" "Use this title in the navigation instead of title."
-        _ <- prop "hide" "Do not include in the table-of-contents if specified."
-        template <- optText "template"
-            "An optional name of a template to use.\
-            \ Activating a template will include extra CSS on the page,\
-            \ and in the future it may also modify the ruleset used\
-            \ to compile the document itself."
-        showToc <- prop "toc" "If provided, show the TOC on this page."
-        body  <- descend block $ content . L.folded
-        pure $ do
-            let htmlTitle = H.text title
-            H.html $ do
+            let titleText    = H.text title
+            H.html ! HA.lang (foldMap H.toValue lang) $ do
                 H.head $ do
-                    H.meta ! A.charset "UTF-8"
-                    H.meta ! A.name "viewport"
-                           ! A.content "width=device-width, initial-scale=1"
-                    H.title htmlTitle
-                    H.link ! A.rel   "stylesheet"
-                           ! A.type_ "text/css"
-                           ! A.href  "res/manual.css"
-                    H.script mempty ! A.src "res/manual.js"
-                    for_ template $ \s ->
-                      H.link ! A.rel   "stylesheet"
-                             ! A.type_ "text/css"
-                             ! A.href  (H.toValue $ "res/" <> s <> ".css")
-                H.body ! (if showToc then A.class_ "toc" else mempty) $ do
-                    H.header . H.hgroup $ do
-                        H.h1 htmlTitle
-                        for_ subtitle $ H.h2 . H.text
-                    when showToc . H.nav $ do
-                        compileToc currentPath toc
+                    H.meta  ! HA.charset "UTF-8"
+                    H.title $ H.text title
+                    style "res/manual.css"
+                    H.script mempty ! HA.src "res/manual.js"
+                H.body $ do
+                    H.header $ do
+                        H.h1 titleText
+                        foldMap (H.h2 . H.text) subtitle
+                    H.nav tocHtml
                     H.main body
-                    H.footer $ do
-                        H.div ! A.id "copyright" $ do
-                          "Copyright ©2020 to Prosidy.org. Available under the "
-                          H.a "MPL v2.0" ! A.href "https://www.mozilla.org/en-US/MPL/2.0/"
-                          " license."
-data NoteLevel = Caution | Note | WIP
-  deriving Show
 
-readNote :: Text -> Either String NoteLevel
-readNote "caution" = Right Caution
-readNote "note"    = Right Note
-readNote "wip"     = Right WIP
-readNote unknown   = Left $ mconcat
-  [ "Unknown note type: "
-  , show unknown
-  , ". Expected 'caution', 'note', or 'wip'"
-  ]
-compileToc :: FilePath -> [Ha.Item TocItem] -> H.Html
-compileToc currentPath = H.ol . foldMap (compileTocItem $ Just currentPath)
+blockTag :: C.ProductRule Block Manual H.Html -> C.ProductRule Paragraph Manual H.Html -> Html BlockTag
+blockTag blockRule paragraphRule = do
+    noteRule <- C.tag "note"
+        "An aside, adding additional information to text." $ do
+            level   <- C.req @NoteLevel "level" "The 'severity' of the note."
+            body <- C.children blockRule
+            pure $ H.aside body ! HA.class_ (H.toValue level)
 
-compileTocItem :: Maybe FilePath -> Ha.Item TocItem -> H.Html
-compileTocItem currentPath item =
-    H.li ! (if isCurrent then A.class_ "current" else mempty) $ do
-        H.a (H.text title) ! A.href (H.toValue itemUrl)
-                           ! (if isCurrent then mempty else H.dataAttribute "target" (H.toValue slug))
-        unless (null children) $
-            H.ol (foldMap (compileTocItem Nothing) $ 
-                fmap (item $>) children)
-  where
-    TocItem title slug children = Ha.itemBody item
-    itemPath                    = Ha.toFilePath $ Ha.itemIdentifier item
-    itemURI                     = itemPath -<.> ".html"
-    itemUrl                     = Text.pack itemURI <> "#" <> slug
-    isCurrent                   = Just itemPath == currentPath
-compileDocument :: [Ha.Item TocItem] -> Ha.Item Document -> Either ManualError H.Html
-compileDocument toc item =
-    runManual (compileM (document currentPath toc) doc) >>= first CompileError
-  where
-    currentPath = Ha.toFilePath $ Ha.itemIdentifier item
-    doc         = Ha.itemBody item
+    listRule <- list blockRule
 
-reqAuto
-    :: (Typeable output, Read output, HasMetadata input, Monad context)
-    => Key -> Text -> Desc input context output
-reqAuto = req $ \inputText ->
-  let
-    input        = Text.unpack inputText
-    annotate msg = msg <> "(input: " <> show inputText <> ")"
-  in
-    first annotate $ readEither input
+    sectionRule <- C.tag "section"
+        "A container which deliniates sections of a page." $ do
+            title     <- C.reqText "title"     "The title of the section."
+            tocTitle  <- C.optText "toc-title" "An optional alternative name to show in the table of contents."
+            slugText  <- C.optText "slug"      "An optional identifier to use as an anchor to this section."
+            body   <- C.children $ C.hoist nesting blockRule
+            hTag      <- C.embed headerTag
+            pure $ do
+                let theSlug = slug $ title `fromMaybe` tocTitle `fromMaybe` slugText
+                H.section ! HA.id (H.toValue theSlug) $ do
+                    hTag $ H.text title
+                    body
 
-reqText :: (HasMetadata input, Monad context) => Key -> Text -> Desc input context Text
-reqText = req Right
+    C.oneOf "block tag" 
+        "A top-level block tag."
+        [ noteRule
+        , listRule
+        , sectionRule
+        ]
 
-optText :: (HasMetadata input, Monad context) => Key -> Text -> Desc input context (Maybe Text)
-optText = opt Right
+inlineTag :: C.ProductRule Inline Manual H.Html -> Html InlineTag
+inlineTag inlineRule = do
+    textRule <- C.fragment "semantic text" 
+        "Plain text, used semantically."
+        pure
+
+    textOnly <- C.inline "text-only"
+        "Text only inline context."
+        (C.disallow "Only text is allowed in this context.")
+        textRule
+        (C.disallow "Please include all text on a single line in this context.")
+
+    boldRule <- C.tag "b"
+        "Boldface text." $ do
+            H.strong <$> C.children inlineRule
+
+    charsRule <- C.tag "chars"
+        "Displays a sequence of characters alongside its Unicode hexadecimal \
+        \representation." $ do
+            rep <- C.reqText "rep" "The literal sequence of characters."
+            body <- C.children textOnly
+            pure $ do
+                let escaped = Text.concatMap (\c -> Text.pack $ Char.showLitChar c []) rep
+                    codepoints = Char.ord <$> Text.unpack rep
+                H.text body
+                " "
+                H.span ! HA.class_ "character-sequence" $ do
+                    H.code (H.text escaped) ! HA.class_ "display"
+                    " "
+                    H.code ! HA.class_ "codepoints" $ do
+                        "0x"
+                        for_ codepoints $ \point ->
+                            H.toHtml $ show point
+
+    defRule <- C.tag "def"
+        "Defines a term." $ do
+            _lemma        <- C.optText "lemma" "The dictionary-form of the term."
+            body          <- C.children textOnly
+            (slug, lemma) <- C.access $ \rawBody -> do
+                let providedLemma = rawBody ^. setting "lemma"
+                    bodyText      = rawBody ^. content . traverse . _InlineFragment . content
+                    lemma         = fromMaybe bodyText providedLemma
+                slug <- define lemma
+                pure (slug, lemma)
+            pure $ H.dfn (H.toHtml body)
+                ! HA.title (H.toValue lemma)
+                ! HA.id ("term-" <> H.toValue slug)
+
+    italicRule <- C.tag "i"
+        "Italicized text." $ do
+            H.em <$> C.children inlineRule
+
+    linkRule <- C.tag "link"
+        "A link to a page outside of the manual." $ do
+            url      <- C.reqText "url"       "The URL that the hyperlink directs toward."
+            samePage <- C.prop    "same-page" "If specified, open the hyperlink in the same tab/window."
+            body  <- C.children inlineRule
+            pure $ H.a body 
+                ! HA.href (H.toValue url)
+                ! if samePage then mempty else HA.target "_blank"
+
+    litRule <- C.tag "lit"
+        "Literal text, inline with normal text."
+        (H.code <$> C.children inlineRule)
+
+    termRule <- C.tag "term"
+        "References a term defined elsewhere in the body with `def`." $ do
+            _lemma  <- C.optText "lemma" "The dictionary-form of the term."
+            body    <- C.children textOnly
+            slug    <- C.access $ \rawBody -> do
+                let providedLemma = rawBody ^. setting "lemma"
+                    bodyText      = rawBody ^. content . traverse . _InlineFragment . content
+                    lemma         = fromMaybe bodyText providedLemma
+                reference lemma
+            pure $ H.a (H.toHtml body)
+                ! HA.class_ "term-reference"
+                ! HA.href ("#" <> "term-" <> H.toValue slug)
+
+    C.oneOf "inline tag" 
+        "A top-level inline tag."
+        [ boldRule
+        , charsRule
+        , defRule
+        , italicRule
+        , litRule
+        , linkRule
+        , termRule
+        ]
+
+literalTag :: Html LiteralTag
+literalTag = do
+    C.oneOf "literal tag" 
+        "A top-level literal tag."
+        [
+        ]
+
+list :: C.ProductRule Block Manual H.Html -> C.Sum BlockTag Manual H.Html
+list blockRule = do
+    itemRule <- C.tag "item"
+        "A single item in a list"
+        (H.li <$> C.children blockRule)
+
+    listBlockTagRule <- C.oneOf "list block"
+        "A block tag which fails on anything that is not an `item`."
+        [ itemRule
+        ]
+            
+    listBlockRule <- C.block "list content"
+        "Inner content of the `list` tag. Only contains `item`s." 
+        listBlockTagRule        
+        (C.disallow "Literals are not allowed as children of a list.")        
+        (C.disallow "Paragraphs are not allowed as children of a list.")        
+        
+    C.tag "list" 
+        "A list of items." $ do
+            ordered <- C.prop "ord" "If provided, the list is an ordered list."
+            content <- C.children listBlockRule
+            pure $ (if ordered then H.ol else H.ul) content
+
+
+toc :: FilePath -> TOC.TableOfContents -> H.Html
+toc currentPath (TOC.TableOfContents entries) = 
+    H.ol . for_ (Map.toList entries) $ \(Slug.FileSlug _ path, entry) ->
+        tocItem (Just currentPath) 0 path entry
+
+tocItem :: Maybe FilePath -> Natural -> FilePath -> TOC.Entry -> H.Html
+tocItem currentPath depth itemPath entry = do
+    let uri 
+          | null currentPath             = H.toValue itemPath <> "#" <> itemSlug
+          | otherwise                    = H.toValue itemPath
+        itemAttributes
+          | currentPath == Just itemPath = HA.class_ "current"
+          | otherwise                    = mempty
+        title                            = H.text $ TOC.entryTitle entry
+        children                         = TOC.entryChildren entry
+        itemSlug                         = H.toValue (TOC.entrySlug entry) 
+    H.li ! itemAttributes $ do
+        H.a title 
+            ! HA.href uri
+            ! (if null currentPath then H.dataAttribute "target" itemSlug else mempty)
+        unless (depth > 1 || null children) 
+            . H.ol 
+            . for_ children 
+            $ tocItem Nothing (succ depth) itemPath
+
+-------------------------------------------------------------------------------
+style :: H.AttributeValue -> H.Html
+style uri = H.link
+    ! HA.href uri
+    ! HA.rel "stylesheet"
+    ! HA.type_ "text/css"
+
+-------------------------------------------------------------------------------
+data NoteLevel =
+    Info
+  | Tip
+  | Important
+  | Caution
+  deriving (Show, Eq, Ord, Enum)
+
+instance H.ToValue NoteLevel where
+    toValue Info      = H.textValue "info"
+    toValue Tip       = H.textValue "tip"
+    toValue Important = H.textValue "important"
+    toValue Caution   = H.textValue "caution"
+
+instance Read NoteLevel where
+    readsPrec _ s = case Text.toLower . Text.strip $ Text.pack s of
+        "info"      -> [(Info, "")]
+        "tip"       -> [(Tip, "")]
+        "important" -> [(Important, "")]
+        "caution"   -> [(Caution, "")]
+        _           -> []

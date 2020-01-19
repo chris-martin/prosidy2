@@ -11,7 +11,6 @@ module Prosidy.Test.Gen
 where
 
 import           Hedgehog
-import           Prosidy.Source (Spanned(..))
 import           Prosidy.Types           hiding ( tag )
 
 import           Data.Functor.Identity          ( Identity(..) )
@@ -25,32 +24,32 @@ import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
 
 doc :: (MonadGen m, GenBase m ~ Identity) => m Document
-doc = Document <$> meta <*> fmap spanned (Gen.seq (Range.linear 0 15) (Gen.small block))
+doc = Document <$> meta <*> Gen.seq (Range.linear 0 15) (Gen.small block)
 
 block :: (MonadGen m, GenBase m ~ Identity) => m Block
 block = Gen.recursive
     Gen.choice
-    [ BlockParagraph . spanned <$> paragraph
-    , BlockLiteral . spanned <$> tag (fmap spanned literal)
+    [ BlockParagraph <$> paragraph
+    , BlockLiteral <$> tag literal
     ]
-    [ BlockTag . spanned <$> (tag . fmap spanned $ Gen.seq (Range.linear 0 15) block) 
+    [ BlockTag <$> (tag $ Gen.seq (Range.linear 0 15) block) 
     ]
 
 paragraph :: (MonadGen m, GenBase m ~ Identity) => m Paragraph
 paragraph = do
     xs <- Gen.seq (Range.linear 1 15) inline
-    maybe (fail "unreachable") (pure . Paragraph) (nonEmpty xs)
+    maybe (fail "unreachable") (pure . flip Paragraph Nothing) (nonEmpty xs)
 
 literal :: (MonadGen m, GenBase m ~ Identity) => m Literal
-literal = Literal <$> Gen.text (Range.exponential 0 15) Gen.unicode
+literal = Literal <$> Gen.text (Range.exponential 0 15) Gen.unicode <*> pure Nothing
 
 inline :: (MonadGen m, GenBase m ~ Identity) => m Inline
 inline = Gen.recursive
     Gen.choice
-    [ InlineText . spanned <$> Gen.text (Range.exponential 1 15) Gen.unicode
+    [ InlineFragment <$> fragment
     , pure Break
     ]
-    [InlineTag . spanned <$> tag (spanned <$> Gen.seq (Range.linear 0 15) inline) ]
+    [ InlineTag <$> tag (Gen.seq (Range.linear 0 15) inline) ]
 
 key :: (MonadGen m, GenBase m ~ Identity) => m Key
 key = do
@@ -61,7 +60,11 @@ key = do
     pure . toKeyUnchecked $ Text.cons keyHead keyTail
 
 tag :: (MonadGen m, GenBase m ~ Identity) => m c -> m (Tagged c)
-tag content = Tagged <$> key <*> meta <*> Gen.small content
+tag content = Tagged 
+    <$> key 
+    <*> meta 
+    <*> Gen.small content
+    <*> pure Nothing
 
 meta :: (MonadGen m, GenBase m ~ Identity) => m Metadata
 meta = do
@@ -72,13 +75,13 @@ meta = do
     pure $ Metadata props settings
 
 blockTag :: (MonadGen m, GenBase m ~ Identity) => m BlockTag
-blockTag = tag . fmap spanned $ Gen.seq (Range.linear 0 15) block
+blockTag = tag $ Gen.seq (Range.linear 0 15) block
 
 inlineTag :: (MonadGen m, GenBase m ~ Identity) => m InlineTag
-inlineTag = tag . fmap spanned $ Gen.seq (Range.linear 0 15) inline
+inlineTag = tag $ Gen.seq (Range.linear 0 15) inline
 
 literalTag :: (MonadGen m, GenBase m ~ Identity) => m LiteralTag
-literalTag = tag $ spanned <$> literal
+literalTag = tag $ literal
 
-spanned :: a -> Spanned a
-spanned = Spanned Nothing
+fragment :: (MonadGen m, GenBase m ~ Identity) => m Fragment
+fragment = Fragment <$> Gen.text (Range.exponential 1 15) Gen.unicode <*> pure Nothing

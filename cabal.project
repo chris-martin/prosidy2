@@ -2,7 +2,7 @@ packages: src/*/*.cabal
 jobs:     $ncpus
 
 package *
-  split-sections: True
+-- split-sections: True
   optimization: True
   executable-stripping: True
 

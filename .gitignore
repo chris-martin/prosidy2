@@ -5,6 +5,9 @@ dist/
 dist-newstyle/
 /cabal.project.local
 /bin/cabal/
-/_site
-/_cache
+/_site/
+/_cache/
+/_out/
+/.shake/
 *~
+

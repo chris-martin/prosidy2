@@ -26,6 +26,7 @@ where
 
 import           Prosidy.Types
 import Prosidy.Source
+import Prosidy.Internal.Optics
 
 import           Text.Megaparsec         hiding ( token )
 import           Text.Megaparsec.Char           ( char
@@ -49,11 +50,9 @@ import           Data.Functor                   ( ($>) )
 import           Data.Foldable                  ( fold
                                                 , traverse_
                                                 )
-import Data.Traversable (sequenceA)                                            
 import           Control.Monad                  ( MonadPlus, void )
 import           Data.Text                      ( Text )
 import           Data.Void                      ( Void )
-import           Data.Sequence                  ( Seq )
 import           Control.Exception              ( Exception
                                                 , throwIO
                                                 )
@@ -64,7 +63,7 @@ import Control.Monad.Trans.Reader (ReaderT(..))
 --
 -- The 'FilePath' parameter is only used for error reporting.
 parseDocument :: FilePath -> Text -> Either Failure Document
-parseDocument path = runP doc . Source path
+parseDocument path = runP doc . makeSource path
 
 -- | Reads a Prosidy 'Document' from the given 'FilePath'.
 --
@@ -82,7 +81,7 @@ readDocument filepath = do
 --
 -- The 'FilePath' parameter is only used for error reporting.
 parseDocumentMetadata :: FilePath -> Text -> Either Failure Metadata
-parseDocumentMetadata path = runP docMetadata . Source path
+parseDocumentMetadata path = runP docMetadata . makeSource path
 
 -- | Reads a Prosidy document's 'Metadata' header from the given 'FilePath'.
 --
@@ -112,14 +111,16 @@ newtype P a = P (ReaderT Source (Parsec Void Text) a)
 type MetadataItem = (Key, Maybe Text)
 
 runP :: P a -> Source -> Either Failure a 
-runP (P (ReaderT r)) src@(Source path txt) = 
-    first Failure $ parse (r src) path txt
+runP (P (ReaderT r)) src = 
+    first Failure $ parse (r src) 
+        (view sourcePath src)
+        (view sourceText src)
 
 -------------------------------------------------------------------------------
 doc :: P Document
 doc = do
     header <- docMetadata
-    body   <- spanned $ Seq.fromList <$> many block
+    body   <- Series . Seq.fromList <$> many block
     eof
     pure $ Document header body
 
@@ -155,33 +156,35 @@ docMetadataItem = do
 -------------------------------------------------------------------------------
 block :: P Block
 block = choice
-    [ BlockTag <$> spanned blockTag
-    , BlockLiteral <$> spanned literalTag
-    , BlockParagraph <$> spanned paragraph
+    [ BlockTag <$> blockTag
+    , BlockLiteral <$> literalTag
+    , BlockParagraph <$> paragraph
     ]
 
 blockTag :: P BlockTag
 blockTag = do
-    t <- genericTag (void $ string "#-") $ option (Spanned Nothing mempty) blockTagContents
+    t <- genericTag (void $ string "#-") $ option mempty blockTagContents
     emptyLines
     pure t
 
-blockTagContents :: P (Spanned (Seq Block))
-blockTagContents = choice
-    [ spanned
-          $ foldMap (Seq.singleton . BlockParagraph . fmap Paragraph) . sequenceA
-        <$> token tagParagraph
-    , spanned
-          $ Seq.fromList 
-        <$> withBlockDelimiters (emptyLines *> many block)
-    ]
+blockTagContents :: P (Series Block)
+blockTagContents = choice [ifBraces, ifBlock]
+  where
+    ifBraces = annotateSource $ fmap 
+        (foldMap $ \x src -> Series . Seq.singleton . BlockParagraph $ Paragraph x src)
+        (token tagParagraph)
+    ifBlock = Series . Seq.fromList <$> withBlockDelimiters (emptyLines *> many block)
 
 literalTag :: P LiteralTag
 literalTag = genericTag (void $ string "#=") $ do
-    close    <- blockTagDelim (void $ optional_ comment *> Megaparsec.newline)
-    litLines <- spanned . manyTill literalLine $ try (skipSpaces *> close)
+    close <- blockTagDelim (void $ optional_ comment *> Megaparsec.newline)
+    literalBody close
+    
+literalBody :: P () -> P Literal
+literalBody end = annotateSource $ do
+    literalLines <- manyTill literalLine (try $ skipSpaces *> end)
     emptyLines
-    pure $ Literal . Text.Lazy.toStrict . Text.Lazy.intercalate "\n" <$> litLines
+    pure $ Literal . Text.Lazy.toStrict . Text.Lazy.intercalate "\n" $ literalLines
 
 literalLine :: P Text.Lazy.Text
 literalLine = do
@@ -207,29 +210,28 @@ withBlockDelimiters parser = do
 -------------------------------------------------------------------------------
 inline :: P Inline
 inline = choice 
-    [ InlineTag  <$> spanned inlineTag
-    , InlineText <$> spanned text
+    [ InlineTag  <$> inlineTag
+    , InlineFragment <$> fragment
     ]
 
 inlineTag :: P InlineTag
-inlineTag = genericTag sigil . option (Spanned Nothing mempty) $
-    fmap orEmpty tagParagraph
+inlineTag = genericTag sigil . option mempty $ orEmpty tagParagraph
   where
-    orEmpty = fmap $ maybe Seq.empty getNonEmpty
+    orEmpty = fmap $ maybe mempty getNonEmpty
     sigil   = try $ do
         void $ char '#'
         void . lookAhead $ satisfy isValidKeyHead
 
 -------------------------------------------------------------------------------
 paragraph :: P Paragraph
-paragraph = paragraphLike
-    >>= maybe (fail "empty paragraph encountered") (pure . Paragraph)
+paragraph = annotateSource $
+    paragraphLike >>= maybe (fail "empty paragraph encountered") (pure . Paragraph)
 
-paragraphLike :: P (Maybe (NonEmpty Seq Inline))
+paragraphLike :: P (Maybe (NonEmpty Series Inline))
 paragraphLike = do
     ppLines <- paragraphLine `sepEndBy1` endOfLine
     emptyLines
-    pure . nonEmpty . Seq.fromList $ List.intercalate [Break] ppLines
+    pure . nonEmpty . Series . Seq.fromList $ List.intercalate [Break] ppLines
 
 paragraphLine :: P [Inline]
 paragraphLine = do
@@ -246,16 +248,16 @@ paragraphSpacer = try $ do
     skipSpaces1
     notFollowedBy $ void (string "##") <|> void Megaparsec.newline
 
-tagParagraph :: P (Spanned (Maybe (NonEmpty Seq Inline)))
-tagParagraph = between start end . spanned $ 
+tagParagraph :: P (Maybe (NonEmpty Series Inline))
+tagParagraph = between start end $ 
     option Nothing paragraphLike
   where
     start = char '{' *> skipSpaces *> optional_ endOfLine
     end   = skipSpaces *> char '}'
 
 -------------------------------------------------------------------------------
-genericTag :: P () -> P (Spanned a) -> P (Tagged a)
-genericTag sigilParser bodyParser = do
+genericTag :: P () -> P a -> P (Tagged a)
+genericTag sigilParser bodyParser = annotateSource $ do
     sigilParser
     thisName     <- toKeyUnchecked <$> keyLike
     thisMetadata <- meta
@@ -326,6 +328,9 @@ quotedText = do
     skipSpaces
     pure . Text.Lazy.toStrict . fold $ parts
 
+fragment :: P Fragment
+fragment = annotateSource (fmap Fragment text)
+
 text :: P Text
 text = do
     parts <- word `sepBy1` textSpace
@@ -386,12 +391,12 @@ itemToMetadata :: MetadataItem -> Metadata
 itemToMetadata (k, Just v ) = Metadata mempty (Map.singleton k v)
 itemToMetadata (k, Nothing) = Metadata (Set.singleton k) mempty
 
-spanned :: P a -> P (Spanned a)
-spanned (P (ReaderT r)) = P . ReaderT $ \src -> do
-    begin  <- Offset . fromIntegral <$> getOffset
-    result <- r src
-    end    <- Offset . fromIntegral <$> getOffset
-    let maybeSpan = if begin /= end 
-                    then Just $ Span src begin end
-                    else Nothing
-    pure $ Spanned maybeSpan result
+annotateSource :: P (Maybe SourceLocation -> a) -> P a
+annotateSource (P (ReaderT r)) = P . ReaderT $ \src -> do
+    offset    <- Offset . fromIntegral <$> getOffset
+    result    <- r src
+    sourceLoc <- maybe (fail sourceLocationError) pure $ sourceLocation src offset
+    pure . result $ Just sourceLoc
+
+sourceLocationError :: String
+sourceLocationError = "UNEXPECTED: Failed to create a source location."

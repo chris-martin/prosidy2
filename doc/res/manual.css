@@ -16,18 +16,38 @@ a {
     text-decoration: none;
 }
 
+a.term-reference {
+    color: inherit;
+    font-style: italic;
+    text-decoration: dotted underline;
+}
+
 a:hover {
     text-decoration: underline;
 }
 
+dfn {
+    font-weight: bold;
+}
+
 h1, h2, h3 {
-    font-family: Playfair Display;
     font-weight: normal;
     margin: 0;
 }
 
+h1, h2 {
+    font-family: Playfair Display;
+}
+
 h3 {
+    font-size: 1.0em;
+    letter-spacing: 0.2em;
     font-variant: small-caps;
+    margin: 0;
+}
+
+h3 + p {
+    margin-top: 0.5em;
 }
 
 /* The document header */
@@ -90,6 +110,19 @@ nav > ol > li > ol {
     font-weight: normal;
 }
 
+nav > ol > li > ol > li > ol {
+    display: none;
+    border-right: 1px solid #2454C7;
+    padding-right: 0.5ch;
+    font-style: italic;
+}
+
+nav > ol > li > ol > li.viewing-child > ol,
+nav > ol > li > ol > li.viewing > ol
+{
+    display: block;
+}
+
 /* main content */
 
 main > p:first-child {
@@ -110,16 +143,14 @@ h6 + section
     margin-top: 1em;
 }
 
-
-
 code {
     background: #f4f4f4;
-    font-family: 'Fira Code', monospace;
+    font-family: monospace;
     font-size: 0.9em;
 }
 
 aside {
-    background-color: #eee;
+    background-color: #ddd;
     border-left: 4px solid #333;
     font-size: 0.85em;
     padding: 1px 0.5em;
@@ -163,6 +194,12 @@ aside.wip::before {
     background-image: url('wip.svg');
 }
 
+
+.char-sequence-literal > span,
+.char-sequence-utf-8 > span {
+    margin-left: 0.25ch;
+}
+
 /* footer */
 footer {
     color: #444;
@@ -197,14 +234,14 @@ footer {
         font-size: 4rem;
     }
     
-    body {
-        display: grid;
+    body.notoc {
         grid-template-columns: 1fr 0 minmax(45ch, 70ch) 1fr;
-        grid-template-rows: max-content max-content min-content;
     }
 
-    body.toc {
+    body {
+        display: grid;
         grid-template-columns: 1fr 15ch minmax(45ch, 70ch) 1fr;
+        grid-template-rows: max-content max-content min-content;
         grid-column-gap: 4ch;
     }
 

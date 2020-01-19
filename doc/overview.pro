@@ -1,6 +1,5 @@
 title: Overview
-toc
-hide
+hidden
 ---
 
 Prosidy is a small language for writing,

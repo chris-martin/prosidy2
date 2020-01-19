@@ -1,62 +1,101 @@
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-module Prosidy.Manual.TableOfContents where
+{-# LANGUAGE StrictData #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingStrategies #-}
+module Prosidy.Manual.TableOfContents 
+    ( TableOfContents(..)
+    , Entry(..)
+    , insertEntry
+    , documentEntry
+    , foldlEntries
+    , foldrEntries
+    ) where
 
 import Prosidy
+import Prosidy.Manual.Slug
+
 import Data.Sequence (Seq)
-
 import Data.Text (Text)
-
 import Control.Applicative ((<|>))
 import qualified Control.Lens as L
 import Control.Lens.Operators
 import qualified Data.Text as Text
 import qualified Data.Char as Char
-
 import Data.Maybe (fromMaybe)
 import Data.Binary (Binary(..))
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Data.Vector (Vector)
 import Numeric.Natural (Natural)
+import qualified Data.Vector as Vector
+import Data.Map.Strict (Map)
+import qualified Data.Text.Lens as TL
+import qualified Data.Map.Strict as Map
+import GHC.Generics (Generic)
+import Data.Hashable (Hashable(..))
+import Control.DeepSeq (NFData)
 
-data TocItem = TocItem
-    { tocTitle    :: Text
-    , tocSlug     :: Text
-    , tocChildren :: [TocItem]
+newtype TableOfContents = TableOfContents (Map FileSlug Entry)
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (Binary, NFData)
+  deriving newtype (Semigroup, Monoid)
+
+instance Hashable TableOfContents where
+    hashWithSalt salt (TableOfContents xs) =
+        Map.foldlWithKey' (\x k v -> x `hashWithSalt` k `hashWithSalt` v) salt xs
+
+data Entry = Entry
+    { entryTitle    :: Text
+    , entrySlug     :: Slug
+    , entryChildren :: Vector Entry
     }
-  deriving Show
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (NFData)
 
-instance Binary TocItem where
-    get = TocItem
-        <$> fmap decodeUtf8 get
-        <*> fmap decodeUtf8 get
+instance Binary Entry where
+    get = Entry
+        <$> get
         <*> get
+        <*> fmap Vector.fromList get
 
-    put (TocItem t s xs) = do
-        put $ encodeUtf8 t
-        put $ encodeUtf8 s
-        put xs
+    put (Entry t s xs) = do
+        put t
+        put s
+        put $ Vector.toList xs
 
-calculateToc :: Natural -> Document -> TocItem
-calculateToc depth = toTocItem depth . L.view _Document
+instance Hashable Entry where
+    hashWithSalt salt (Entry title slug children) =
+        Vector.foldl' hashWithSalt (salt `hashWithSalt` title `hashWithSalt` slug) children
 
-foldToc :: Natural -> L.Fold (Region (Seq Block)) TocItem
-foldToc 0 = const pure
-foldToc depth = content . L.folded . allSections . L.to (toTocItem depth)
+insertEntry :: FilePath -> Entry -> TableOfContents -> TableOfContents
+insertEntry fpath dEntry (TableOfContents toc) = TableOfContents toc'
+    where
+      dSlug  = FileSlug (slugIndex $ entrySlug dEntry) fpath
+      toc'   = L.set (L.at dSlug) (Just dEntry) toc
+
+foldrEntries :: (Entry -> a -> a) -> a -> TableOfContents -> a
+foldrEntries f ini (TableOfContents toc) = Map.foldr f ini toc
+
+foldlEntries :: (a -> Entry -> a) -> a -> TableOfContents -> a
+foldlEntries f ini (TableOfContents toc) = Map.foldl' f ini toc
+
+documentEntry :: Document -> Entry
+documentEntry = regionToEntry . L.view regionOf
+
+regionToEntry :: Region (Series Block) -> Entry
+regionToEntry region = Entry rTitle rSlug rChildren
   where
-    allSections :: L.Fold Block (Region (Seq Block))
+    rTitle    = fromMaybe "<UNTITLED>" $
+        region ^? L.failing 
+            (setting "toc-title" . L._Just)
+            (setting "title"     . L._Just)
+    rIndex    = fromMaybe 0 $ region ^? setting "priority" . L._Just . L.re TL.packed . L._Show
+    rSlug     = (slug $ fromMaybe rTitle (region ^. setting "slug")) { slugIndex = rIndex }
+    rChildren = Vector.fromList $ region ^.. entryFold
+
+entryFold :: L.Fold (Region (Series Block)) Entry
+entryFold = content . L.folded . allSections . L.to regionToEntry
+  where
     allSections = L.deepOf 
-        (_BlockTag . spanning . content . L.folded) 
-        (_BlockTag . spanning . _Tagged "section")
-
-toTocItem :: Natural -> Region (Seq Block) -> TocItem
-toTocItem depth r = TocItem navTitle slug $ r ^.. foldToc (pred depth)
-  where
-    realTitle = fromMaybe "UNTITLED" $ r ^. setting "title"
-    navTitle  = fromMaybe realTitle  $ r ^. setting "nav-title"
-    slug      = fromMaybe (toSlug realTitle) $ r ^. setting "slug"
-
-toSlug :: Text -> Text
-toSlug = Text.intercalate "-"
-    . filter (not . Text.null)
-    . Text.split (not . Char.isAlpha)
-    . Text.toLower
+        (_BlockTag . content . L.folded)
+        (_BlockTag . _Tagged "section")

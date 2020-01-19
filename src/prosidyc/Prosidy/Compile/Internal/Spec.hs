@@ -12,6 +12,7 @@
 module Prosidy.Compile.Internal.Spec where
 
 import           Prosidy.Types                  ( Key )
+import Prosidy.Compile.Internal.Info (InfoKey(..), PropertyInfo(..), SettingInfo(..))
 import           Prosidy.Compile.Internal.Util  ( setOnce
                                                 , typeOf
                                                 )
@@ -41,17 +42,10 @@ newtype Spec output = Spec
   deriving (Functor, Applicative, Monad)
     via SpecM
 
-data ItemKey = ItemKey
-    { ruleName      :: Text
-    , ruleInputType :: SomeTypeRep
-    }
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass (Hashable)
-
 data SpecState = SpecState
     { _propertyMap :: HashMap Key PropertyInfo
     , _settingMap  :: HashMap Key SettingInfo
-    , _descendWith :: Maybe ItemKey
+    , _descendWith :: Maybe InfoKey
     }
   deriving stock (Eq, Generic, Show)
 
@@ -59,24 +53,9 @@ data SpecError =
     SpecFail String
   | PropertyConflict Key PropertyInfo
   | SettingConflict Key SettingInfo
-  | SubruleConflict ItemKey
-  | Wrapped Text SpecError
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass (Hashable)
-
-data PropertyInfo = PropertyInfo
-    { propertyName        :: Key
-    , propertyDescription :: Text
-    }
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass (Hashable)
-
-data SettingInfo = SettingInfo
-    { settingName :: Key
-    , settingDescription :: Text
-    , settingType :: SomeTypeRep
-    , settingRequired :: Bool
-    }
+  | RuleConflict InfoKey
+  | SubruleConflict InfoKey
+  | WrappedSpecError InfoKey SpecError
   deriving stock (Eq, Generic, Show)
   deriving anyclass (Hashable)
 
@@ -95,9 +74,6 @@ specifySetting required key description = specM $ do
     let info = SettingInfo key description (typeOf @output) required
     setOnce (settingMap . L.at key) (SettingConflict key) info
 
-itemKey :: forall a. Typeable a => Text -> ItemKey
-itemKey text = ItemKey text $ SomeTypeRep (typeRep @a)
-
 -------------------------------------------------------------------------------
 type SpecM = ResultT SpecError (State SpecState)
 
@@ -110,5 +86,5 @@ propertyMap = field @"_propertyMap"
 settingMap :: L.Lens' SpecState (HashMap Key SettingInfo)
 settingMap = field @"_settingMap"
 
-descendWith :: L.Lens' SpecState (Maybe ItemKey)
+descendWith :: L.Lens' SpecState (Maybe InfoKey)
 descendWith = field @"_descendWith"

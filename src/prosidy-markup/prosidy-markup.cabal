@@ -8,7 +8,7 @@ cabal-version:         >=1.10
 license:               MPL-2.0
 license-file:          LICENSE
 build-type:            Simple
-version:               0.1.0.0
+version:               0.2.0.0
 
 executable prosidy-markup
   hs-source-dirs:        .
@@ -22,3 +22,4 @@ executable prosidy-markup
                        , text
                        , lens
                        , optparse-applicative
+                       , transformers

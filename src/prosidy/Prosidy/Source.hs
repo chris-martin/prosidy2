@@ -1,201 +1,207 @@
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GADTSyntax #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StrictData #-}
-module Prosidy.Source where
+{-# LANGUAGE TupleSections #-}
+module Prosidy.Source 
+    ( Source
+    , sourcePath
+    , sourceText
+    , makeSource
+    , nthLine
+    , nthLineAndContext
+
+    , SourceLocation
+    , sourceLocationSource
+    , sourceLocationOffset
+    , sourceLocationLine
+    , sourceLocationColumn
+    , sourceLocation
+    , prettySourceLocation
+
+    -- , FromSource(..)
+    -- , location
+    -- , _FromSource
+
+    , Line(..)
+    , _Line
+    , Column(..)
+    , _Column
+    , Offset(..)
+    , _Offset
+    ) where
 
 import Prosidy.Internal.Optics
-
-import qualified Data.Text as Text
 
 import Data.Foldable (foldl')
 import Data.Aeson (FromJSON(..), ToJSON(..))
 import Data.Text (Text)
-import Data.Word (Word)
-import Data.Sequence (Seq)
+import Data.Word (Word64)
+import Data.Maybe (mapMaybe)
 import GHC.Generics (Generic)
-import Data.Hashable (Hashable)
+import Data.Hashable (Hashable(..))
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
+import Data.Binary (Binary)
+import Control.DeepSeq (NFData)
 
 -------------------------------------------------------------------------------
 data Source where
-    Source :: FilePath -> Text -> Source
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (Hashable)
+    Source :: FilePath -> LineMap -> Text -> Source
+  deriving stock (Eq, Generic)
+  deriving anyclass (Hashable, NFData, Binary)
+
+instance Show Source where
+    show (Source fp _ _) = "Source " <> show fp
 
 sourcePath :: Lens' Source FilePath
 sourcePath = lens get set 
   where
-    get (Source p _)   = p
-    set (Source _ t) p = Source p t
+    get (Source p _ _)   = p
+    set (Source _ l t) p = Source p l t
 {-# INLINE sourcePath #-}
 
 sourceText :: Lens' Source Text
 sourceText = lens get set
   where
-    get (Source _ t)   = t
-    set (Source p _) = Source p
+    get (Source _ _ t)   = t
+    set (Source p l _) = Source p l
 {-# INLINE sourceText #-}
 
--------------------------------------------------------------------------------
-data Span where
-    Span :: Source -> Offset -> Offset -> Span
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (Hashable)
-
-spanSource :: Lens' Span Source
-spanSource = lens get set
+makeSource :: FilePath -> Text -> Source
+makeSource fp txt = Source fp (LineMap lm) txt
   where
-    get (Span s _ _) = s
-    set (Span _ f t) s = Span s f t
-{-# INLINE spanSource #-}
+    (_, _, lm) = foldl' lmFold (1, '\0', Map.singleton (Line 0) (Offset 0)) . zip [0..] $ Text.unpack txt
+    lmFold (nth, prev, acc) (ix, ch)
+        | ch ==  '\n' && prev == '\r' =
+          (nth, ch, Map.insert (Line (pred nth)) (Offset (succ ix)) acc)
+        | ch == '\n' || ch == '\r' =
+          (succ nth, ch, Map.insert (Line nth) (Offset (succ ix)) acc)
+        | otherwise =
+          (nth, ch, acc)
 
-spanBegin :: Lens' Span Offset
-spanBegin = lens get set
+nthLine :: Line -> Source -> Maybe Text
+nthLine line (Source _ (LineMap lm) txt) =
+    case (start, end) of
+        (Nothing, Nothing) -> Nothing
+        _ -> Just
+           . maybe id Text.drop start 
+           . maybe id (Text.dropEnd . (len -) . pred) end
+           $ txt
   where
-    get (Span _ f _) = f
-    set (Span s _ t) f = Span s f t
-{-# INLINE spanBegin #-}
+    len                = Text.length txt
+    start              = offsetI <$> Map.lookup line lm
+    end                = offsetI <$> Map.lookup (succ line) lm
+    offsetI (Offset n) = fromIntegral n :: Int
 
-spanEnd :: Lens' Span Offset
-spanEnd = lens get set
-  where
-    get (Span _ _ t) = t
-    set (Span s f _) = Span s f
-{-# INLINE spanEnd #-}
-
--------------------------------------------------------------------------------
-data SpanDetail where 
-    SpanDetail :: Position -> Position -> Text -> SpanDetail
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (Hashable)
-
-spanDetailBegin :: Lens' SpanDetail Position
-spanDetailBegin = lens get set
-  where
-    get (SpanDetail x _ _) = x
-    set (SpanDetail _ y z) x = SpanDetail x y z
-{-# INLINE spanDetailBegin #-}
-
-spanDetailEnd :: Lens' SpanDetail Position
-spanDetailEnd = lens get set
-  where
-    get (SpanDetail _ y _) = y
-    set (SpanDetail x _ z) y = SpanDetail x y z
-{-# INLINE spanDetailEnd #-}
-
-spanDetailText :: Lens' SpanDetail Text
-spanDetailText = lens get set
-  where
-    get (SpanDetail _ _ z) = z
-    set (SpanDetail x y _) = SpanDetail x y
-{-# INLINE spanDetailText #-}
-
-spanDetail :: Span -> SpanDetail
-spanDetail (Span (Source _ srcText) (Offset from) (Offset to)) =
-    SpanDetail startPosition endPosition spanned
-  where
-    (before, srcText') = Text.splitAt (fromIntegral from) srcText
-    (spanned, _after)  = Text.splitAt (fromIntegral to) srcText'
-    startPosition      = advancePosition (Position (Line 0) (Column 0)) before
-    endPosition        = advancePosition startPosition spanned
-
-advancePosition :: Position -> Text -> Position
-advancePosition p = fst . foldl' (uncurry go) (p, '\0') . Text.unpack
-  where
-    go pos '\r' '\n' = (pos, '\n')
-    go (Position (Line line) (Column col)) _ ch
-      | ch == '\n' || ch == '\r' = (Position (Line $ succ line) (Column 0), ch)
-      | otherwise = (Position (Line line) (Column $ succ col), ch)
+nthLineAndContext :: Line -> Word64 -> Source -> [(Line, Text)]
+nthLineAndContext (Line nth) n src = do
+    let withLine x = (Line x,) <$> nthLine (Line x) src
+    mapMaybe withLine [nth - n .. nth + n]
 
 -------------------------------------------------------------------------------
-data Spanned a where
-    Spanned :: Maybe Span -> a -> Spanned a
-  deriving stock (Eq, Functor, Foldable, Traversable, Generic)
-  deriving anyclass (Hashable)
+newtype LineMap where
+    LineMap :: Map Line Offset -> LineMap
+  deriving stock (Eq, Generic)
+  deriving anyclass (NFData, Binary)
+  deriving newtype (Show)
 
-instance Show a => Show (Spanned a) where
-  show (Spanned Nothing x) = "Unspanned " <> show x
-  show (Spanned (Just s) x) =
-      "Spanned " <> (show from) <> (show to) <> (show txt) <> (show x)
-    where
-      SpanDetail from to txt = spanDetail s
+instance Hashable LineMap where
+    hashWithSalt salt (LineMap m) =
+        Map.foldlWithKey' 
+            (\acc k v -> acc `hashWithSalt` k `hashWithSalt` v)
+            salt
+            m
+-------------------------------------------------------------------------------
+data SourceLocation where
+    SourceLocation :: Source -> Offset -> ~Line -> ~Column -> SourceLocation
+  deriving stock (Show, Generic)
+  deriving anyclass (NFData, Binary)
 
-instance FromJSON a => FromJSON (Spanned a) where
-    parseJSON = fmap (Spanned Nothing) . parseJSON
+instance Eq SourceLocation where
+    SourceLocation src o _ _ == SourceLocation src' o' _ _ =
+        src == src' && o == o'
 
-instance ToJSON a => ToJSON (Spanned a) where
-    toEncoding (Spanned _ x) = toEncoding x
-    toJSON     (Spanned _ x) = toJSON x
+instance Hashable SourceLocation where
+    hashWithSalt salt (SourceLocation src o _ _) =
+        salt `hashWithSalt` src `hashWithSalt` o
 
-spanning :: Lens (Spanned a) (Spanned b) a b
-spanning = lens get set
-  where 
-    get (Spanned _ x)  = x
-    set (Spanned ms _) = Spanned ms
-{-# INLINE spanning #-}
+sourceLocationSource :: Lens' SourceLocation Source
+sourceLocationSource = lens get set
+  where
+    get (SourceLocation src _ _ _) = src
+    set (SourceLocation _ os l c) src = SourceLocation src os l c
+{-# INLINE sourceLocationSource #-}
 
-spanOfMaybe :: Lens' (Spanned a) (Maybe Span)
-spanOfMaybe = lens get set 
-  where 
-    get (Spanned ms _)  = ms
-    set (Spanned _ a)   = flip Spanned a
-{-# INLINE spanOfMaybe #-}
+sourceLocationLine :: Lens' SourceLocation Line
+sourceLocationLine = lens get set
+  where
+    get (SourceLocation _ _ l _) = l
+    set (SourceLocation src os _ c) l = SourceLocation src os l c
+{-# INLINE sourceLocationLine #-}
 
-spanOf :: Affine' (Spanned a) Span
-spanOf = affine get set
-  where 
-    get (Spanned ms _)  = ms
-    set (Spanned _ a)   = flip Spanned a . Just
-{-# INLINE spanOf #-}
+sourceLocationColumn :: Lens' SourceLocation Column
+sourceLocationColumn = lens get set
+  where
+    get (SourceLocation _ _ _ c) = c
+    set (SourceLocation src os l _) = SourceLocation src os l
+{-# INLINE sourceLocationColumn #-}
 
-type SpannedSeq a = Spanned (Seq (Spanned a))
+sourceLocationOffset :: Lens' SourceLocation Offset
+sourceLocationOffset = lens get set
+  where
+    get (SourceLocation _ os _ _) = os
+    set (SourceLocation src _ l c) os = SourceLocation src os l c
+{-# INLINE sourceLocationOffset #-}
+
+sourceLocation :: Source -> Offset -> Maybe SourceLocation
+sourceLocation src@(Source _ (LineMap lm) _) offset@(Offset nthChar) = do
+    (line, Offset lOffset) <- Map.foldrWithKey lineFold Nothing lm
+    let column = Column $ nthChar - lOffset
+    Just $ SourceLocation src offset line column
+  where
+    lineFold key val Nothing
+      | val <= offset = Just (key, val)
+      | otherwise     = Nothing
+    lineFold _ _ x = x
+
+prettySourceLocation :: SourceLocation -> String
+prettySourceLocation (SourceLocation (Source path _ _) _ line col) =
+    path <> ":" <> show line <> "," <> show col
 
 -------------------------------------------------------------------------------
-data Position where
-    Position :: Line -> Column -> Position
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (Hashable)
+newtype Line = Line Word64
+  deriving stock (Eq, Ord, Generic)
+  deriving newtype (ToJSON, FromJSON, Enum)
+  deriving anyclass (Hashable, NFData, Binary)
 
-positionLine :: Lens' Position Line
-positionLine = lens get set
-  where
-    get (Position l _) = l
-    set (Position _ c) = flip Position c
+instance Show Line where
+    show (Line n) = show (succ n)
 
-positionColumn :: Lens' Position Column
-positionColumn = lens get set
-  where
-    get (Position _ c) = c
-    set (Position l _) = Position l
-
-newtype Line = Line Word
-  deriving stock (Eq, Show, Generic)
-  deriving newtype (ToJSON, FromJSON)
-  deriving anyclass (Hashable)
-
-_Line :: Iso' Line Word
+_Line :: Iso' Line Word64
 _Line = iso (\(Line n) -> n) Line
 {-# INLINE _Line #-}
 
-newtype Column = Column Word
-  deriving stock (Eq, Show, Generic)
+newtype Column = Column Word64
+  deriving stock (Eq, Ord ,Generic)
   deriving newtype (ToJSON, FromJSON)
-  deriving anyclass (Hashable)
+  deriving anyclass (Hashable, NFData, Binary)
 
-_Column :: Iso' Column Word
+instance Show Column where
+    show (Column n) = show (succ n)
+
+_Column :: Iso' Column Word64
 _Column = iso (\(Column n) -> n) Column
 {-# INLINE _Column #-}
 
-newtype Offset = Offset Word
-  deriving stock (Eq, Show, Generic)
+newtype Offset = Offset Word64
+  deriving stock (Eq, Show, Ord, Generic)
   deriving newtype (ToJSON, FromJSON)
-  deriving anyclass (Hashable)
+  deriving anyclass (Hashable, NFData, Binary)
 
-_Offset :: Iso' Offset Word
+_Offset :: Iso' Offset Word64
 _Offset = iso (\(Offset n) -> n) Offset
 {-# INLINE _Offset #-}

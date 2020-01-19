@@ -2,9 +2,11 @@ title: Syntax Guide
 style: style.css
 ---
 
+#-this_is_garbage
+
 #-h{Headers}
 
-#=code[lang='prosidy']:
+#=src[lang='prosidy']:
 #-h{This will be rendered as an h2 tag.}
 #-h+{This will be rendered as an h3 tag.}
 #-h++{This will be rendered as an h4 tag.}
@@ -14,9 +16,10 @@ style: style.css
 #-h+{This will be rendered as an h3 tag.}
 #-h++{This will be rendered as an h4 tag.}
 
+
 #-h{Emphasis}
 
-#=code[lang='prosidy']:
+#=src[lang='prosidy']:
 #i{This text will be italic,} #b{and this text will be bold.}
 You #i{#b{can}} combine them if you like.
 #:
@@ -28,7 +31,7 @@ You #i{#b{can}} combine them if you like.
 
 #-h+{Unordered}
 
-#=code[lang='prosidy']:end
+#=src[lang='prosidy']:end
 #-list:
   #-item{Item 1}
   #-item:
@@ -67,7 +70,7 @@ You #i{#b{can}} combine them if you like.
 #:
 
 #-h+{Ordered}
-#=code[lang='prosidy']:end
+#=src[lang='prosidy']:end
 #-list[ord]:
   #-item{Item 1}
 
@@ -110,31 +113,31 @@ You #i{#b{can}} combine them if you like.
 #:
 
 #-h{Images}
-#=code[lang='prosidy']:end
+#=src[lang='prosidy']:end
 These images are inline—
-#image[url='https://placekitten.com/32/32?1'],
-#image[url='https://placekitten.com/32/32?2', title='The "title" key attaches "alt-text"'],
+#image[url='https://placekitten.com/32/32?1', desc='A picutre of kittens.'],
+#image[url='https://placekitten.com/32/32?2', desc='Another kitten photo.', title='The "title" key attaches "alt-text"'],
 but block images are also supported!
 
-#-image[url='https://placekitten.com/400/200?3']{And block images support captions!}
+#-image[url='https://placekitten.com/400/200?3', desc='A third photo.']{And block images support captions!}
 #:end
 
 These images are inline—
-#image[url='https://placekitten.com/32/32?1'],
-#image[url='https://placekitten.com/32/32?2', title='The "title" key attaches "alt-text"'],
+#image[url='https://placekitten.com/32/32?1', desc='A picutre of kittens.'],
+#image[url='https://placekitten.com/32/32?2', desc='Another kitten photo.', title='The "title" key attaches "alt-text"'],
 but block images are also supported!
 
-#-image[url='https://placekitten.com/400/200?3']{And block images support captions!}
+#-image[url='https://placekitten.com/400/200?3', desc='A third photo.']{And block images support captions!}
 
 #-h{Links}
-#=code[lang='prosidy']:end
+#=src[lang='prosidy']:end
 Here's a link to the #link[url='https://prosidy.org']{Prosidy homepage}.
 #:end
 
 Here's a link to the #link[url='https://prosidy.org']{Prosidy homepage}.
 
 #-h{Blockquotes}
-#=code[lang='prosidy']:end
+#=src[lang='prosidy']:end
 #-quote:
   Everything within a "quote" block is rendered as block quotes.
 #:
@@ -147,13 +150,13 @@ Here's a link to the #link[url='https://prosidy.org']{Prosidy homepage}.
 #-h{Code}
 
 #-h+{Code blocks}
-#=code[lang='prosidy']:end
-#=code[lang='haskell']:
+#=src[lang='prosidy']:end
+#=src[lang='haskell']:
 fibonacci :: [Integer]
 fibonacci = 0 : 1 : zipWith (+) fib (tail fib)
 #:
 
-#=code[lang='python']:
+#=src[lang='python']:
 def fibonacci(n):
     a = 0
     b = 1
@@ -163,12 +166,12 @@ def fibonacci(n):
 #:
 #:end
 
-#=code[lang='haskell']:
+#=src[lang='haskell']:
 fibonacci :: [Integer]
 fibonacci = 0 : 1 : zipWith (+) fib (tail fib)
 #:
 
-#=code[lang='python']:
+#=src[lang='python']:
 def fibonacci(n):
     a = 0
     b = 1
@@ -178,7 +181,7 @@ def fibonacci(n):
 #:
 
 #-h+{Inline code}
-#=code[lang='prosidy']:end
+#=src[lang='prosidy']:end
 Some code: #lit{foo} #lit{bar}.
 #:end
 

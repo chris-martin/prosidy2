@@ -1,5 +1,7 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GADTSyntax #-}
@@ -15,9 +17,45 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE QuasiQuotes #-}
 module Prosidy.Types
-    ( Block(..)
-    , Document(..)
+    ( -- * the top level document
+      Document(..)
+
+      -- * Block contexts
+    , Block(..)
+    , _BlockLiteral
+    , _BlockTag
+    , _BlockParagraph
+
+      -- * Inline contexts
     , Inline(..)
+    , _InlineTag
+    , _InlineFragment
+    , _Break
+
+      -- * Tags
+    , Tagged(..)
+    , BlockTag
+    , InlineTag
+    , LiteralTag
+    , tag
+    , _Tagged
+
+      -- * Untagged regions
+    , Region(..)
+    , HasContent(..)
+    , addTag
+    , regionOf
+
+      -- * Literals
+    , Literal(..)
+
+      -- * Paragraphs
+    , Paragraph(..)
+
+      -- * Plain text fragments
+    , Fragment(..)
+
+      -- * Keys
     , Key
     , pattern Key
     , keyName
@@ -26,35 +64,26 @@ module Prosidy.Types
     , toKeyUnchecked
     , isValidKeyHead
     , isValidKeyTail
-    , Literal(..)
+
+      -- * Series
+    , Series(..)
+    , _Series
+
+      -- * Metadata
     , Metadata(..)
-    , Paragraph(..)
-    , Tagged(..)
-    , tag
-    , _Tagged
-    , Region(..)
-    , addTag
-    , HasContent(..)
     , HasMetadata(..)
     , properties
     , property
     , settings
     , setting
+
+      -- * Source tagging
+    , FromSource(..)
+
+      -- * Non-empty foldables
     , NonEmpty
     , nonEmpty
     , getNonEmpty
-    , BlockTag
-    , InlineTag
-    , LiteralTag
-    , _BlockLiteral
-    , _BlockTag
-    , _BlockParagraph
-    , _InlineTag
-    , _InlineText
-    , _Break
-    , _Paragraph
-    , _Literal
-    , _Document
     ) where
 
 import Prosidy.Internal.Optics
@@ -62,17 +91,20 @@ import Prosidy.Internal.JSON
 import Prosidy.Source
 
 import Control.Monad (guard)
-import Data.Foldable (asum)
 import Data.Maybe (fromMaybe)
 import Data.Map.Strict (Map)
 import Data.Sequence (Seq)
 import Data.Set (Set)
 import Data.Text (Text)
-import Data.Hashable (Hashable)
+import Data.Hashable (Hashable(hashWithSalt))
 import Data.Aeson (FromJSON(..), FromJSONKey(..), ToJSON(..), ToJSONKey(..))
 import Data.Aeson.Types (FromJSONKeyFunction(..))
 import Data.String (IsString(..))
 import Type.Reflection (Typeable)
+import Data.Binary (Binary)
+import Control.DeepSeq (NFData)
+import GHC.Generics (Generic)
+import Data.Foldable (asum, foldl', toList)
 
 import qualified Data.Char as Char
 import qualified Data.Set as Set
@@ -80,40 +112,53 @@ import qualified Data.Text as Text
 import qualified Data.Map.Strict as Map
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.Quote as Q
+import qualified Data.Sequence as Seq
+import qualified Data.Binary as Binary
 
 -------------------------------------------------------------------------------
 data Block where
-    BlockTag       :: Spanned BlockTag   -> Block
-    BlockParagraph :: Spanned Paragraph  -> Block
-    BlockLiteral   :: Spanned LiteralTag -> Block
-  deriving (Eq, Show)
+    BlockTag       :: BlockTag   -> Block
+    BlockParagraph :: Paragraph  -> Block
+    BlockLiteral   :: LiteralTag -> Block
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Hashable, Binary, NFData)
   deriving (FromJSON, ToJSON) via (JSON Block)
 
+instance FromSource Block where
+    location = affine get set
+      where
+        get (BlockTag       x) = preview location x
+        get (BlockParagraph x) = preview location x
+        get (BlockLiteral   x) = preview location x
+        set (BlockTag       x) src = BlockTag       $ assign location src x
+        set (BlockParagraph x) src = BlockParagraph $ assign location src x
+        set (BlockLiteral   x) src = BlockLiteral   $ assign location src x
+
 instance Serde Block where
-    serde = asum
+    serde = finalizeSerde $ asum
         [ choice "tag" (Just "literal") _BlockLiteral
         , choice "paragraph" Nothing _BlockParagraph
         , choice "tag" (Just "block") _BlockTag
         , noMatch "Expected a LiteralTag, BlockTag, or Paragraph"
         ]
 
-type BlockTag = Tagged (Seq Block)
+type BlockTag = Tagged (Series Block)
 
 type LiteralTag = Tagged Literal
 
-_BlockLiteral :: Prism' Block (Spanned LiteralTag)
+_BlockLiteral :: Prism' Block LiteralTag
 _BlockLiteral = prism BlockLiteral $ \case
     BlockLiteral item -> Just item
     _                 -> Nothing
 {-# INLINE _BlockLiteral #-}
 
-_BlockParagraph :: Prism' Block (Spanned Paragraph)
+_BlockParagraph :: Prism' Block Paragraph
 _BlockParagraph = prism BlockParagraph $ \case
     BlockParagraph item -> Just item
     _                   -> Nothing
 {-# INLINE _BlockParagraph #-}
 
-_BlockTag :: Prism' Block (Spanned BlockTag)
+_BlockTag :: Prism' Block BlockTag
 _BlockTag = prism BlockTag $ \case
     BlockTag item -> Just item
     _             -> Nothing
@@ -121,22 +166,21 @@ _BlockTag = prism BlockTag $ \case
 
 -------------------------------------------------------------------------------
 data Document where
-    Document :: Metadata -> Spanned (Seq Block) -> Document
-  deriving (Eq, Show)
+    Document :: Metadata -> Series Block -> Document
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Hashable, NFData, Binary)
   deriving (ToJSON, FromJSON) via (JSON Document)
 
-instance Serde Document where
-    serde = Document
-        <$> field "metadata" metadata
-        <*> field "content"  spannedContent
+instance FromSource Document where
+    location = nullAffine
 
 instance HasContent Document where
-    type Content Document = Seq Block
-    spannedContent = lens get set
+    type Content Document = Series Block
+    content = lens get set
       where
         get (Document _ c) = c
         set (Document m _) = Document m
-    {-# INLINE spannedContent #-}
+    {-# INLINE content #-}
 
 instance HasMetadata Document where
     metadata = lens get set
@@ -145,26 +189,40 @@ instance HasMetadata Document where
         set (Document _ c) m = Document m c
     {-# INLINE metadata #-}
 
-_Document :: Iso' Document (Region (Seq Block))
-_Document = iso (\(Document m c) -> Region m c) (\(Region m c) -> Document m c)
+instance Serde Document where
+    serde = finalizeSerde $ Document
+        <$> field "metadata" metadata
+        <*> field "content"  content
 
 -------------------------------------------------------------------------------
 data Inline where
-    Break       :: Inline
-    InlineTag   :: Spanned InlineTag -> Inline
-    InlineText  :: Spanned Text      -> Inline
-  deriving (Eq, Show)
+    Break          :: Inline
+    InlineTag      :: InlineTag -> Inline
+    InlineFragment :: Fragment  -> Inline
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Hashable, NFData, Binary)
   deriving (FromJSON, ToJSON) via (JSON Inline)
 
+instance FromSource Inline where
+    location = affine get set
+      where
+        get Break = Nothing
+        get (InlineTag x) = preview location x
+        get (InlineFragment x) = preview location x
+
+        set Break _ = Break
+        set (InlineTag x) src = InlineTag $ assign location src x
+        set (InlineFragment x) src = InlineFragment $ assign location src x
+
 instance Serde Inline where
-    serde = asum
+    serde = finalizeSerde $ asum
         [ choice "break" Nothing _Break
         , choice "tag" (Just "inline") _InlineTag
-        , choice "text" Nothing _InlineText
+        , choice "text" Nothing _InlineFragment
         , noMatch "Expected an Break, InlineTag, or Inline Text"
         ]
 
-type InlineTag = Tagged (Seq Inline)
+type InlineTag = Tagged (Series Inline)
 
 _Break :: Prism' Inline ()
 _Break = prism (const Break) $ \case
@@ -172,22 +230,24 @@ _Break = prism (const Break) $ \case
     _     -> Nothing
 {-# INLINE _Break #-}
 
-_InlineTag :: Prism' Inline (Spanned InlineTag)
+_InlineTag :: Prism' Inline InlineTag
 _InlineTag = prism InlineTag $ \case
     InlineTag t -> Just t
     _           -> Nothing
 {-# INLINE _InlineTag #-}
 
-_InlineText :: Prism' Inline (Spanned Text)
-_InlineText = prism InlineText $ \case
-    InlineText text -> Just text
-    _               -> Nothing
-{-# INLINE _InlineText #-}
+_InlineFragment :: Prism' Inline Fragment
+_InlineFragment = prism InlineFragment $ \case
+    InlineFragment text -> Just text
+    _                   -> Nothing
+{-# INLINE _InlineFragment #-}
 
 -------------------------------------------------------------------------------
 newtype Key where
     UncheckedKey :: Text -> Key
   deriving newtype (Eq, Hashable, Ord, Show, ToJSON, ToJSONKey)
+  deriving stock (Generic)
+  deriving anyclass (NFData, Binary)
 
 instance FromJSON Key where
     parseJSON json = do
@@ -248,23 +308,47 @@ isValidKeyTail = not . invalid
     reserved = Set.fromList "\\#{}[]:=,"
 
 -------------------------------------------------------------------------------
-newtype Literal where
-    Literal :: Text -> Literal
-  deriving newtype (Eq, FromJSON, Show, ToJSON)
+data Literal where
+    Literal :: Text -> Maybe SourceLocation -> Literal
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Hashable, NFData, Binary)
+  deriving (ToJSON, FromJSON) via (JSON Literal)
 
-_Literal :: Iso' Literal Text
-_Literal = iso (\(Literal txt) -> txt) Literal
-{-# INLINE _Literal #-}
+instance FromSource Literal where
+    location = affine get set
+      where
+        get (Literal _ src) = src
+        set (Literal txt _) = Literal txt . Just
+    {-# INLINE location #-}
+
+instance HasContent Literal where
+    type Content Literal = Text
+    content = lens get set
+      where
+        get (Literal t _) = t
+        set (Literal _ src) t = Literal t src
+    {-# INLINE content #-}
+
+instance Serde Literal where
+    serde = wrapper (view content) (flip Literal Nothing)
 
 -------------------------------------------------------------------------------
 data Metadata where
     Metadata :: Set Key -> Map Key Text -> Metadata
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (NFData, Binary)
   deriving (FromJSON, ToJSON) via (JSON Metadata)
 
 instance HasMetadata Metadata where
     metadata = id
     {-# INLINE metadata #-}
+
+instance Hashable Metadata where
+    hashWithSalt salt (Metadata ks ss) =
+        Map.foldlWithKey'
+          (\acc k v -> acc `hashWithSalt` k `hashWithSalt` v)
+          (foldl' hashWithSalt salt ks)
+          ss
 
 instance Monoid Metadata where
     mempty = Metadata mempty mempty
@@ -274,99 +358,167 @@ instance Semigroup Metadata where
         Metadata (x1 <> y1) (x2 <> y2)
 
 instance Serde Metadata where
-    serde = Metadata
+    serde = finalizeSerde $ Metadata
         <$> field "properties" properties
         <*> field "settings"   settings
 
 -------------------------------------------------------------------------------
-newtype Paragraph where
-    Paragraph :: NonEmpty Seq Inline -> Paragraph
-  deriving newtype (Eq, FromJSON, Show, ToJSON)
+data Paragraph where
+    Paragraph :: NonEmpty Series Inline -> Maybe SourceLocation -> Paragraph
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Hashable, NFData, Binary)
+  deriving (ToJSON, FromJSON) via JSON Paragraph
 
-_Paragraph :: Iso' Paragraph (NonEmpty Seq Inline)
-_Paragraph = iso (\(Paragraph xs) -> xs) Paragraph
-{-# INLINE _Paragraph #-}
+instance FromSource Paragraph where
+    location = affine get set
+      where
+        get (Paragraph _ src) = src
+        set (Paragraph ct _) = Paragraph ct . Just
+    {-# INLINE location #-}
+
+instance HasContent Paragraph where
+    type Content Paragraph = NonEmpty Series Inline
+    content = lens get set
+      where
+        get (Paragraph ct _) = ct
+        set (Paragraph _ src) ct = Paragraph ct src
+    {-# INLINE content #-}
+
+instance Serde Paragraph where
+    serde = wrapper (view content) (flip Paragraph Nothing)
 
 -------------------------------------------------------------------------------
 data Tagged content where
-    Tagged :: Key -> Metadata -> Spanned content -> Tagged content
-  deriving stock (Eq, Foldable, Functor, Show, Traversable)
+    Tagged :: Key -> Metadata -> content -> Maybe SourceLocation -> Tagged content
+  deriving stock (Eq, Foldable, Functor, Show, Traversable, Generic)
+  deriving anyclass (Hashable, NFData, Binary)
   deriving (FromJSON, ToJSON) via (JSON (Tagged content))
+
+instance FromSource (Tagged content) where
+    location = affine get set
+      where
+        get (Tagged _ _ _ src) = src
+        set (Tagged key md x _) = Tagged key md x . Just
+    {-# INLINE location #-}
 
 instance HasContent (Tagged content) where
     type Content (Tagged content) = content
-    spannedContent = lens get set
+    content = lens get set
       where
-        get (Tagged _ _ c) = c
-        set (Tagged k m _) = Tagged k m
-    {-# INLINE spannedContent #-}
+        get (Tagged _ _ c _) = c
+        set (Tagged k m _ src) c = Tagged k m c src
+    {-# INLINE content #-}
 
 instance HasMetadata (Tagged c) where
     metadata = lens get set
       where
-        get (Tagged _ m _)   = m
-        set (Tagged k _ c) m = Tagged k m c
+        get (Tagged _ m _ _)   = m
+        set (Tagged k _ c src) m = Tagged k m c src
     {-# INLINE metadata #-}
 
 instance (Typeable c, ToJSON c, FromJSON c) => Serde (Tagged c) where
-    serde = Tagged
+    serde = finalizeSerde $ Tagged
         <$> field "name" tag
         <*> field "metadata" metadata
-        <*> field "content" spannedContent
+        <*> field "content" content
+        <*> pure Nothing
 
 tag :: Lens' (Tagged c) Key
 tag = lens get set
   where
-    get (Tagged k _ _) = k
-    set (Tagged _ m c) k = Tagged k m c
+    get (Tagged k _ _ _) = k
+    set (Tagged _ m c src) k = Tagged k m c src
 {-# INLINE tag #-}
 
 _Tagged :: Key -> Prism' (Tagged c) (Region c)
 _Tagged key = prism (addTag key) $ \case
-    Tagged k meta c
-        | k == key -> Just $ Region meta c
+    Tagged k meta c src
+        | k == key -> Just $ Region meta c src
     _              -> Nothing
 {-# INLINE _Tagged #-}
 
 -------------------------------------------------------------------------------
+data Fragment where
+    Fragment :: Text -> Maybe SourceLocation -> Fragment
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Hashable, NFData, Binary)
+  deriving (ToJSON, FromJSON) via JSON Fragment
+
+instance FromSource Fragment where
+    location = affine get set
+      where
+        get (Fragment _ src) = src
+        set (Fragment txt _) = Fragment txt . Just
+    {-# INLINE location #-}
+
+instance HasContent Fragment where
+    type Content Fragment = Text
+    content = lens get set
+      where
+        get (Fragment txt _) = txt
+        set (Fragment _ src) txt = Fragment txt src
+    {-# INLINE content #-}
+
+instance Serde Fragment where
+    serde = wrapper (view content) (flip Fragment Nothing)
+
+-------------------------------------------------------------------------------
 data Region content where
-    Region :: Metadata -> Spanned content -> Region content
-  deriving stock (Eq, Foldable, Functor, Show, Traversable)
+    Region :: Metadata -> content -> Maybe SourceLocation -> Region content
+  deriving stock (Eq, Foldable, Functor, Show, Traversable, Generic)
+  deriving anyclass (Hashable, NFData, Binary)
   deriving (FromJSON, ToJSON) via (JSON (Region content))
+
+instance FromSource (Region content) where
+    location = affine get set
+      where
+        get (Region _ _ src) = src
+        set (Region md x _) = Region md x . Just
+    {-# INLINE location #-}
 
 instance HasContent (Region content) where
     type Content (Region content) = content
-    spannedContent = lens get set
+    content = lens get set
       where
-        get (Region _ c) = c
-        set (Region m _) = Region m
-    {-# INLINE spannedContent #-}
+        get (Region _ c _) = c
+        set (Region m _ src) c = Region m c src
+    {-# INLINE content #-}
 
 instance HasMetadata (Region c) where
     metadata = lens get set
       where
-        get (Region m _)   = m
-        set (Region _ c) m = Region m c
+        get (Region m _ _)   = m
+        set (Region _ c src) m = Region m c src
     {-# INLINE metadata #-}
 
 instance (Typeable c, ToJSON c, FromJSON c) => Serde (Region c) where
-    serde = Region
+    serde = finalizeSerde $ Region 
         <$> field "metadata" metadata
-        <*> field "content" spannedContent
+        <*> field "content" content
+        <*> pure Nothing
 
 addTag :: Key -> Region c -> Tagged c
-addTag key (Region m c) = Tagged key m c
+addTag key (Region m c src) = Tagged key m c src
+
+regionOf :: (HasMetadata i, HasContent i, FromSource i) => Lens' i (Region (Content i))
+regionOf = lens get set
+  where
+    get = Region <$> view metadata <*> view content <*> preview location
+    set x (Region md ct loc) = 
+        maybe id (assign location) loc
+        . assign metadata md
+        . assign content ct
+        $ x
+{-# INLINE regionOf #-}
 
 -------------------------------------------------------------------------------
 class HasContent node where
     type family Content node
-    spannedContent :: Lens' node (Spanned (Content node))
-
     content :: Lens' node (Content node)
-    content = spannedContent . spanning
 
-    {-# INLINE content #-}
-    {-# MINIMAL spannedContent #-}
+class FromSource node where
+    location :: Affine' node SourceLocation
+
 -------------------------------------------------------------------------------
 class HasMetadata node where
     metadata :: Lens' node Metadata
@@ -402,9 +554,28 @@ setting key = settings . lens get set
 {-# INLINE setting #-}
 
 -------------------------------------------------------------------------------
+newtype Series a = Series (Seq a)
+  deriving newtype (Eq, Foldable, Functor, Applicative, Show, ToJSON, FromJSON, NFData, Semigroup, Monoid)
+  deriving stock (Generic)
+
+instance Binary a => Binary (Series a) where
+    get = Series . Seq.fromList <$> Binary.get
+    put (Series xs) = Binary.put $ toList xs
+
+instance Hashable a => Hashable (Series a) where
+    hashWithSalt salt (Series xs) = foldl' hashWithSalt salt xs
+
+instance Traversable Series where
+    traverse f (Series xs) = Series <$> traverse f xs
+
+_Series :: Iso' (Series a) (Seq a)
+_Series = iso (\(Series xs) -> xs) Series
+{-# INLINE _Series #-}
+
+-------------------------------------------------------------------------------
 newtype NonEmpty f x where
     UncheckedNonEmpty :: f x -> NonEmpty f x
-  deriving newtype (Eq, Foldable, Functor, Show, ToJSON)
+  deriving newtype (Eq, Foldable, Functor, Show, ToJSON, Generic, Hashable, NFData, Binary)
 
 instance (Foldable f, FromJSON (f x)) => FromJSON (NonEmpty f x) where
     parseJSON json = do
