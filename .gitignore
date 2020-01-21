@@ -9,4 +9,4 @@ dist-newstyle/
 /_out/
 /.shake/
 *~
-
+/.ghc

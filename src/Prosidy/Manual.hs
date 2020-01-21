@@ -9,11 +9,11 @@ module Prosidy.Manual where
 import Control.Applicative (Alternative(..))
 import qualified Options.Applicative as O
 import Prosidy (readDocument)
-import Data.Foldable (foldr', foldrM, for_)
+import Data.Foldable (foldr', for_)
 import Prosidy.Manual.TableOfContents (documentEntry, insertEntry)
 import Prosidy.Manual.Compile (compile, document)
 import Data.Bifunctor (second)
-import Control.Exception (SomeException, throwIO, displayException, handle, fromException)
+import Control.Exception (throwIO, displayException, handle, fromException)
 import System.Exit (ExitCode, exitFailure)
 import qualified Data.ByteString.Lazy as LBS
 import System.FilePath ((</>), (-<.>))

@@ -14,7 +14,6 @@ import           Prosidy
 import qualified Prosidy.Compile               as C
 
 import           Data.Maybe                     ( fromMaybe )
-import           Data.Functor.Identity          ( Identity )
 import           Options.Applicative
 import           Data.Text                      ( Text )
 import           Control.Exception              ( throwIO
@@ -23,20 +22,15 @@ import           Control.Exception              ( throwIO
 import           Text.Blaze.Html.Renderer.Utf8  ( renderHtml )
 import           Data.ByteString.Lazy                 ( toStrict )
 import           Text.Blaze.Html5               ( (!) )
-import qualified Text.Blaze.Internal           as Blaze
 
 import qualified System.IO                     as IO
-import qualified Data.Text.IO                  as Text.IO
 import           Data.Foldable                  ( for_ )
 import qualified Data.ByteString as BS
 import Data.Text.Encoding (decodeUtf8)
 
-import qualified Control.Lens                  as L
-import           Control.Lens.Operators
 import qualified Text.Blaze.Html5              as H
 import qualified Text.Blaze.Html5.Attributes   as A
-import           Control.Monad.Trans.Reader     ( ReaderT(..)
-                                                , Reader
+import           Control.Monad.Trans.Reader     ( Reader
                                                 , runReader
                                                 , asks
                                                 )
@@ -45,7 +39,7 @@ import           Control.Exception              ( displayException )
 
 main :: IO ()
 main = do
-    opts@Opts {..} <- getOpts
+    Opts {..} <- getOpts
     input <- withFile' IO.stdin inputFile IO.ReadMode (fmap decodeUtf8 . BS.hGetContents)
     document <- either throwIO pure
         $ parseDocument (fromMaybe "<stdin>" inputFile) input

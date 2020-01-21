@@ -1,4 +1,9 @@
 #!/bin/sh
 set -eu
 cd "$(git rev-parse --show-toplevel)"
-exec nix run --file nix/default.nix m --command m "$@"
+export NIX_PATH="nixpkgs=$PWD/nix/nixpkgs.nix"
+
+nix run --file nix/default.nix m --command m "$@" || {
+    nix log --file nix/default.nix m | cat
+    exit 1
+}
