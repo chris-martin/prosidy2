@@ -5,7 +5,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
-module Main
+module Prosidy.Markup
     ( main
     )
 where
@@ -20,14 +20,16 @@ import           Data.Text                      ( Text )
 import           Control.Exception              ( throwIO
                                                 , bracket
                                                 )
-import           Text.Blaze.Html.Renderer.Text  ( renderHtml )
-import           Data.Text.Lazy                 ( toStrict )
+import           Text.Blaze.Html.Renderer.Utf8  ( renderHtml )
+import           Data.ByteString.Lazy                 ( toStrict )
 import           Text.Blaze.Html5               ( (!) )
 import qualified Text.Blaze.Internal           as Blaze
 
 import qualified System.IO                     as IO
 import qualified Data.Text.IO                  as Text.IO
 import           Data.Foldable                  ( for_ )
+import qualified Data.ByteString as BS
+import Data.Text.Encoding (decodeUtf8)
 
 import qualified Control.Lens                  as L
 import           Control.Lens.Operators
@@ -44,7 +46,7 @@ import           Control.Exception              ( displayException )
 main :: IO ()
 main = do
     opts@Opts {..} <- getOpts
-    input <- withFile' IO.stdin inputFile IO.ReadMode Text.IO.hGetContents
+    input <- withFile' IO.stdin inputFile IO.ReadMode (fmap decodeUtf8 . BS.hGetContents)
     document <- either throwIO pure
         $ parseDocument (fromMaybe "<stdin>" inputFile) input
     case
@@ -55,8 +57,9 @@ main = do
                 IO.hPutStrLn IO.stderr $ displayException err
                 exitFailure
             Right html -> do
-                withFile' IO.stdout outputFile IO.WriteMode $ \handle ->
-                    Text.IO.hPutStrLn handle . toStrict . renderHtml $ html
+                withFile' IO.stdout outputFile IO.WriteMode $ \handle -> do
+                    BS.hPut handle . toStrict . renderHtml $ html
+                    BS.hPut handle "\n"
 
 withFile'
     :: IO.Handle -> Maybe FilePath -> IO.IOMode -> (IO.Handle -> IO a) -> IO a

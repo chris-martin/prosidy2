@@ -4,7 +4,7 @@
 {-# LANGUAGE RecursiveDo       #-}
 {-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE TypeFamilies      #-}
-module Prosidy.Manual where
+module Prosidy.Manual.Compile (compile, document) where
 
 import           Text.Blaze.Html5               ( (!) )
 import           Prosidy
@@ -23,26 +23,22 @@ import qualified Text.Blaze.Html5.Attributes   as HA
 import           Text.Blaze.Html.Renderer.Utf8  ( renderHtml )
 import qualified Prosidy.Compile               as C
 import qualified Data.ByteString.Lazy          as LBS
-import           Control.Monad                  ( when
-                                                , unless
-                                                )
 import qualified Data.Text                     as Text
 import qualified Data.Char                     as Char
 import qualified Data.Map.Strict               as Map
 import           Numeric.Natural                ( Natural )
-
-import           Debug.Trace
+import Control.Monad (unless)
 
 type Html a = C.Product a Manual H.Html
 
 compile
     :: Html a
-    -> FilePath
     -> TOC.TableOfContents
+    -> FilePath
     -> a
     -> Either ManualError LBS.ByteString
-compile h fp toc input = do
-    result <- runManual (C.compileM h input) fp toc
+compile h contents fp input = do
+    result <- runManual (C.compileM h input) fp contents
     case result of
         Left  err -> Left $ CompileError err
         Right ok  -> Right $ renderHtml ok

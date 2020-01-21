@@ -16,20 +16,12 @@ where
 import           Prosidy
 import           Prosidy.Manual.Slug
 
-import           Data.Sequence                  ( Seq )
 import           Data.Text                      ( Text )
-import           Control.Applicative            ( (<|>) )
 import qualified Control.Lens                  as L
 import           Control.Lens.Operators
-import qualified Data.Text                     as Text
-import qualified Data.Char                     as Char
 import           Data.Maybe                     ( fromMaybe )
 import           Data.Binary                    ( Binary(..) )
-import           Data.Text.Encoding             ( decodeUtf8
-                                                , encodeUtf8
-                                                )
 import           Data.Vector                    ( Vector )
-import           Numeric.Natural                ( Natural )
 import qualified Data.Vector                   as Vector
 import           Data.Map.Strict                ( Map )
 import qualified Data.Text.Lens                as TL

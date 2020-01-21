@@ -1,0 +1,3 @@
+cradle:
+    bios:
+        program: bin/hie-bios-setup

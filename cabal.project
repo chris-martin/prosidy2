@@ -1,9 +1,0 @@
-packages: src/*/*.cabal
-jobs:     $ncpus
-
-package *
--- split-sections: True
-  optimization: True
-  executable-stripping: True
-
-constraints: hakyll -usePandoc
