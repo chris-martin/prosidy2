@@ -21,33 +21,6 @@ until dropping a pinch of flour into the oil causes it to bubble.
 into the oil until the roux is the desired color.
 #:end
 
-This repository hosts a few Prosidy-related projects:
-
-#-list:
-  #-item:
-    #link[url='/prosidy/tree/src/prosidy']{#lit{prosidy}}—
-    Prosidy's reference parser
-  #:
-  #-item:
-    #link[url='/prosidy/tree/src/prosidyc']{#lit{prosidyc}}—
-    A Haskell DSL for writing Prosidy schemas and compiling them at the same
-    time.
-  #:
-  #-item:
-    #link[url='/prosidy/tree/src/prosidy-markup']{#lit{prosidy-markup}}—
-    A Prosidy dialect targeting the same use cases as Markdown:
-    quick, formatted plain text. (This README is written in it!)
-  #:
-  #-item:
-    #link[url='/prosidy/tree/src/prosidy-manual']{#lit{prosidy-manual}}—
-    Another Prosidy dialect currently being used to write the Prosidy manual.
-  #:
-  #-item:
-    #link[url='/prosidy/tree/src/poetic']{#lit{poetic}}—
-    A preprocessor for literate programming files. Works great with GHC if you
-    set #lit{-pgmL poetic}.
-  #:
-#:
 
 All of the code here is under #b{heavy} development;
 be careful before using it for anything critical!
@@ -56,5 +29,11 @@ That said, feedback is more than welcome!
 Reach me at #link[url='mailto:alex@fldcr.com']{alex@fldcr.com}.
 
 #-h{Changelog}
+#-h+{2020-01-20}
+Switched from Cabal to Shake to allow better CI tooling.
+
+#-h+{2020-01-19}
+Added source tags to all Prosidy elements meaning better errors!
+
 #-h+{2020-01-03}
 Refactored the various Prosidy repositories into a single monorepo.
