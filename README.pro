@@ -21,16 +21,20 @@ until dropping a pinch of flour into the oil causes it to bubble.
 into the oil until the roux is the desired color.
 #:end
 
-
 All of the code here is under #b{heavy} development;
 be careful before using it for anything critical!
 
 That said, feedback is more than welcome!
 Reach me at #link[url='mailto:alex@fldcr.com']{alex@fldcr.com}.
 
+#-h{Developing Prosidy}
+This project sets up an environment using direnv and Nix.
+We'd recommend you have both installed before building,
+although it may work without both.
+
 #-h{Changelog}
-#-h+{2020-01-20}
-Switched from Cabal to Shake to allow better CI tooling.
+#-h+{2020-01-24}
+Combined multiple Cabal projects into a super-Cabal file.
 
 #-h+{2020-01-19}
 Added source tags to all Prosidy elements meaning better errors!
