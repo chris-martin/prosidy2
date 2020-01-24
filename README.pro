@@ -10,7 +10,7 @@ Like #link[url='https://www.w3.org/XML/']{XML},
 Prosidy is extensible: it doesn't make any assumptions about your content.
 You'll never have to fight to make your data fit a structure that wasn't designed for it.
 
-#=prosidy:end
+#=src[lang='prosidy']:end
 recipe: A simple roux
 ---
 In a #ware{medium saucepan},

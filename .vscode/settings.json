@@ -1,13 +1,18 @@
 {
     "files.exclude": {
-        "_cache/**": true,
-        "_site/**": true,
+        "_out/**": true,
         "dist/**": true,
-        ".done/**": true,
-        "dist-newstyle": true,
-        ".envrc": true,
+        "dist-newstyle/**": true,
         ".ghc.environment.*": true,
         ".gitattributes": true,
-        ".brittany.yaml": true
+        ".ghc/**": true
+    },
+    "files.watcherExclude": {
+        "_out/**": true,
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        ".ghc/**": true,
+        "dist/**": true,
+        "dist-newstyle/**": true
     }
 }

@@ -1,15 +1,37 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 cd "$(git rev-parse --show-toplevel)"
-nix build --file nix --out-link .ghc ghc
+HIE_BIOS_OUTPUT="${HIE_BIOS_OUTPUT:-/dev/fd/1}"
 
-GHC_PACKAGE_PATH="$(realpath "$(find .ghc/lib -type d -name package.conf.d)")/"
+function write
+{
+    cat >> "$HIE_BIOS_OUTPUT"
+}
 
-cat <<EOF > "$HIE_BIOS_OUTPUT"
+if command -v nix >/dev/null 2>&1
+then
+    export NIX_PATH="nixpkgs=$PWD/nix/nixpkgs.nix"
+    nix build --file nix --out-link .ghc ghc
+    write <<EOF
 -clear-package-db
--package-db=$GHC_PACKAGE_PATH
--isrc
--ibuild
+-package-db="$(realpath "$(find .ghc/lib -type d -name package.conf.d)")/"
+EOF
+else
+    version="$(ghc --numeric-version)"
+    write <<EOF
+-package-db
+$HOME/.cabal/store/ghc-${version}/package.db
+EOF
+fi
+
+write <<EOF 
 -Wall
 -Wno-name-shadowing
+-i
+-ibuild
 EOF
+
+for path in src/*
+do
+    echo "-i${path}" >> "$HIE_BIOS_OUTPUT"
+done

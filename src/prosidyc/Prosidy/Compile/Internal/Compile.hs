@@ -16,6 +16,7 @@ module Prosidy.Compile.Internal.Compile where
 
 import qualified Prosidy                       as P
 
+import Prosidy.Internal.Optics (Affine')
 import qualified Prosidy.Compile.Internal.Error
                                                as Error
 import qualified Prosidy.Compile.Internal.Eval as Eval
@@ -28,9 +29,7 @@ import           Data.Foldable                  ( asum )
 import qualified Control.Lens                  as L
 import           Control.Lens.Operators
 import           Data.Generics.Product          ( field
-                                                , position
                                                 )
-import           Data.Generics.Sum.Constructors ( _Ctor )
 import           Data.Functor                   ( ($>) )
 import           Control.Monad.Morph            ( MFunctor(..) )
 import           Control.Monad.Reader           ( ask )
@@ -47,14 +46,11 @@ import           Data.Functor.Identity          ( Identity(..) )
 import           Control.Monad.Fix              ( MonadFix )
 import           GHC.Generics                   ( Generic )
 import           Data.Functor.Compose           ( Compose(..) )
-import           Data.Profunctor                ( Profunctor(..) )
 import           Data.Monoid                    ( Ap(..) )
 import           Type.Reflection                ( Typeable )
 import           Data.Text                      ( Text )
-import           Data.Bifunctor                 ( Bifunctor(..) )
 import qualified Data.HashSet                  as HashSet
 import           Control.Exception              ( Exception(..) )
-import           Control.Monad.Morph            ( MFunctor(..) )
 
 newtype Compile a = Compile
     (Registry -> (Either CompileError a, Registry))
@@ -193,7 +189,7 @@ productRule thisKey description (Desc spec) = liftCompileM $ do
 sumRule
     :: forall choice input output context
      . Monad context
-    => Util.Affine' input choice
+    => Affine' input choice
     -> Info.InfoKey
     -> ProductRule choice context output
     -> Sum input context output
@@ -214,8 +210,7 @@ chooseOne
     -> [SumRule input context output]
     -> Product input context output
 chooseOne thisKey description choices = liftCompileM $ do
-    let thisMetadata = fmap (L.view $ field @"metadata") choices
-        subRuleKeys =
+    let subRuleKeys =
             HashSet.fromList
                 $   choices
                 ^.. traverse

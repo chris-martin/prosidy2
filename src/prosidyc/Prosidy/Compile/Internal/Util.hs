@@ -21,21 +21,10 @@ import           Type.Reflection                ( Typeable
                                                 , SomeTypeRep(..)
                                                 , typeRep
                                                 )
-import           Data.Profunctor                ( Choice(..)
-                                                , Strong(..)
-                                                )
 import           Control.Monad.Cont             ( ContT
                                                 , runContT
                                                 , callCC
                                                 )
-
-type Affine s t a b
-    =  forall p f
-     . (Choice p, Strong p, Applicative f)
-    => p a (f b)
-    -> p s (f t)
-
-type Affine' s a = Affine s s a a
 
 withCC :: Monad m => ((r -> ContT r m r) -> ContT r m r) -> m r
 withCC = \f -> runContT (callCC f) pure

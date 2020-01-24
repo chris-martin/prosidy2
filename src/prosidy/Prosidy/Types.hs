@@ -282,7 +282,7 @@ keyQ = Q.QuasiQuoter
         | not (all isValidKeyTail cs) = fail $ "invalid key: " <> show str
         | otherwise                   = ok str
     checkKey _ [] = fail "empty string cannot be used as a key"
-    unsupported kind = fail $ kind <> " are not supported by the 'key' quasiquoter."
+    unsupported kind _ = fail $ kind <> " are not supported by the 'key' quasiquoter."
 
 toKey :: Text -> Maybe Key
 toKey text = do

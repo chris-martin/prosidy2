@@ -15,7 +15,6 @@ import qualified Prosidy                       as P
 
 import           Data.HashMap.Strict            ( HashMap )
 import           Type.Reflection                ( SomeTypeRep(..)
-                                                , TypeRep
                                                 , Typeable
                                                 , typeRep
                                                 )
@@ -23,8 +22,6 @@ import           Data.Text                      ( Text )
 import           GHC.Generics                   ( Generic )
 import           Data.Hashable                  ( Hashable )
 import           Data.HashSet                   ( HashSet )
-
-import qualified Data.Text                     as Text
 
 data InfoKey = InfoKey
     { inputType :: SomeTypeRep

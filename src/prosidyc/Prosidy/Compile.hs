@@ -44,15 +44,11 @@ import           Prelude                 hiding ( break )
 
 import qualified Prosidy                       as P
 import           Prosidy.Compile.Internal.Spec  ( SpecError(..) )
-import           Prosidy.Compile.Internal.Eval  ( Eval(Eval)
-                                                , EvalError(..)
+import           Prosidy.Compile.Internal.Eval  ( EvalError(..)
                                                 , exhaustive
                                                 )
 import           Prosidy.Compile.Internal.Compile
 import           Prosidy.Compile.Internal.Info  ( infoKey )
-import qualified Prosidy.Compile.Internal.Error
-                                               as Error
-import           Data.Sequence                  ( Seq )
 import           Type.Reflection                ( Typeable )
 import           Data.Text                      ( Text )
 import           Text.Read                      ( readEither )

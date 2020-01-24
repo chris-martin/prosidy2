@@ -282,6 +282,7 @@ data Opts = Opts
     }
   deriving Show
 
+getOpts :: IO Opts
 getOpts = execParser $ info optParse optInfo
   where
     optParse = do

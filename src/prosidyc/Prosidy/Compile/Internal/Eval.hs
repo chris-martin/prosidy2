@@ -13,7 +13,6 @@ import           Prosidy.Compile.Internal.Info  ( InfoKey
 import           Prosidy.Compile.Internal.Error ( Result(Fail)
                                                 , ResultT(..)
                                                 , raiseError
-                                                , mapErrors
                                                 , singleton
                                                 )
 import           Prosidy.Types                  ( Key
@@ -28,7 +27,6 @@ import           Prosidy.Source                 ( SourceLocation
                                                 , nthLineAndContext
                                                 , sourceLocationSource
                                                 , sourceLocationLine
-                                                , _Line
                                                 )
 import           Control.Exception              ( Exception(..) )
 
@@ -41,7 +39,6 @@ import           GHC.Generics                   ( Generic )
 import           Data.HashSet                   ( HashSet )
 import           Data.Text                      ( Text )
 import           Data.Generics.Product          ( field )
-import           Data.Bifunctor                 ( first )
 import           Data.List                      ( intercalate )
 import qualified Data.Map                      as Map
 
@@ -132,11 +129,16 @@ instance Exception EvalError where
             , displayException inner
             ]
 
-    displayException (WrappedEvalError key (Just loc) inner) =
+    displayException (WrappedEvalError key Nothing inner) =
         "While proccessing the contents of "
             <> displayInfoKey key
             <> "\n\n"
-            <> prettySourceLocation loc
+            <> displayException inner
+
+    displayException (WrappedEvalError key (Just loc) inner) =
+        "While proccessing the contents of "
+            <> displayInfoKey key
+            <> " at " <> prettySourceLocation loc
             <> "\n\n"
             <> (let showLine nth line =
                           Text.justifyRight 4 ' ' (Text.pack $ show nth)

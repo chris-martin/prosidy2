@@ -109,7 +109,7 @@ prettyFailure (Failure e) = errorBundlePretty e
 
 -------------------------------------------------------------------------------
 newtype P a = P (ReaderT Source (Parsec Void Text) a)
-  deriving newtype (Functor, Applicative, Alternative, Monad, MonadPlus, MonadParsec Void Text)
+  deriving newtype (Functor, Applicative, Alternative, Monad, MonadFail, MonadPlus, MonadParsec Void Text)
 
 type MetadataItem = (Key, Maybe Text)
 
