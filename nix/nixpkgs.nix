@@ -15,5 +15,4 @@ let
     sha256 = "1jmfj8az48ifli39ww1yxhi489pfkcnb5zmiv6x117v37zbv3mr5";
   };
 in
-  if static then nixpkgs.static else nixpkgs
-
+  if static then nixpkgs.pkgsMusl else nixpkgs
