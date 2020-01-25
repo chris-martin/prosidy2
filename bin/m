@@ -8,13 +8,19 @@ then
     nix build --file nix --out-link .ghc ghc
 fi
 
+ghc_version="$(ghc --numeric-version)"
+
 cabal_cmd="${1}" || {
     echo 'A cabal command was not provided' >&2
     exit 1
 }
 shift
 
-cabal_opts=( --builddir="$PWD/_out/cabal" )
+cabal_opts=( 
+    --builddir="$PWD/_out/cabal" 
+    --package-db=clear
+    --package-db="$PWD/.ghc/lib/ghc-${ghc_version}/package.conf.d"
+)
 
 case cabal_cmd in
     install)
