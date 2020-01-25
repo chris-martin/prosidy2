@@ -8,10 +8,18 @@ then
     nix build --file nix --out-link .ghc ghc
 fi
 
-cabal_opts=(
-    --builddir="$PWD/_out/cabal" 
-    --installdir="$PWD/_out/bin"
-)
+cabal_cmd="${1}" || {
+    echo 'A cabal command was not provided' >&2
+    exit 1
+}
+shift
+
+cabal_opts=( --builddir="$PWD/_out/cabal" )
+
+case cabal_cmd in
+    install)
+        cabal_opts+=( --installdir="$PWD/_out/bin" )
+esac
 
 if [ -n "${JENKINS_URL:-}" ]
 then
@@ -20,4 +28,4 @@ then
     )
 fi
 
-exec cabal "${cabal_opts[@]}" "$@"
+exec cabal "$cabal_cmd" "${cabal_opts[@]}" "$@"
