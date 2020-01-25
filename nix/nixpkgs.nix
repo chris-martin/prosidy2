@@ -1,18 +1,17 @@
 #
-# Repo: https://github.com/NixOS/nixpkgs-channels
-# Branch: nixos-19.09-small
+# Repo:    https://github.com/NixOS/nixpkgs-channels
+# Branch:  nixos-unstable
+# Updated: 2019-01-25
 #
 
 args:
 
 let
   static     = builtins.getEnv "NIX_STATIC" != "";
-  archiveUrl = "https://github.com/NixOS/nixpkgs-channels/archive/${commit}.tar.gz";
-  commit     = "d14cea0dec2dd59e19457180feef315054ba8c57";
+  url        = "https://github.com/NixOS/nixpkgs-channels/archive/${commit}.tar.gz";
+  commit     = "05626cc86b8a8bbadae7753d2e33661400ff67de";
+  sha256     = "1lx5hs2yzg21pc8fv982kdqhc5j5kxi08h8wn3plx848bcnd8jj6";
   nixpkgs    = import tarball args;
-  tarball    = builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs-channels/archive/d14cea0dec2dd59e19457180feef315054ba8c57.tar.gz";
-    sha256 = "1jmfj8az48ifli39ww1yxhi489pfkcnb5zmiv6x117v37zbv3mr5";
-  };
+  tarball    = builtins.fetchTarball { inherit url sha256; };
 in
   if static then nixpkgs.pkgsMusl else nixpkgs
