@@ -60,6 +60,17 @@ import           Control.Exception              ( Exception
                                                 )
 import           Control.Monad.Trans.Reader     ( ReaderT(..) )
 
+{-
+    If you run into errors, use the following combinator to get Megaparsec to 
+    print out its state.
+
+    > import qualified Text.Megaparsec.Debug
+    > 
+    > dbg :: Show a => String -> P a -> P a
+    > dbg txt (P (ReaderT r)) = P . ReaderT $ \src ->
+    >     Text.Megaparsec.Debug.dbg txt $ r src
+-}
+
 -------------------------------------------------------------------------------
 -- | Parses a Prosidy 'Document' from its source.
 --
@@ -74,8 +85,8 @@ parseDocument path = runP doc . makeSource path
 readDocument :: FilePath -> IO Document
 readDocument filepath = do
     bytes <- ByteString.readFile filepath
-    either throwIO pure . parseDocument filepath $ Text.Encoding.decodeUtf8
-        bytes
+    either throwIO pure . parseDocument filepath $ 
+        Text.Encoding.decodeUtf8With (\_ _ -> Just '\65533') bytes
 
 -------------------------------------------------------------------------------
 -- | Parses a Prosidy document's header 'Metadata' from source, stopping when the
@@ -141,7 +152,7 @@ docMetadataEnd = do
     void $ string "---"
     try $ do
         skipSpaces
-        Megaparsec.newline
+        newlineOrEOF
         skipSpaces
     skipMany endOfLine
 
@@ -164,12 +175,12 @@ block = choice
 
 blockTag :: P BlockTag
 blockTag = do
-    t <- genericTag (void $ string "#-") $ option mempty blockTagContents
+    t <- genericTag (void $ string "#-") blockTagContents
     emptyLines
     pure t
 
 blockTagContents :: P (Series Block)
-blockTagContents = choice [ifBraces, ifBlock]
+blockTagContents = choice [ifBraces, ifBlock, ifNothing]
   where
     ifBraces = annotateSource $ fmap
         (foldMap $ \x src ->
@@ -178,10 +189,11 @@ blockTagContents = choice [ifBraces, ifBlock]
         (token tagParagraph)
     ifBlock = Series . Seq.fromList <$> withBlockDelimiters
         (emptyLines *> many block)
+    ifNothing = skipSpaces *> endOfLine $> mempty
 
 literalTag :: P LiteralTag
 literalTag = genericTag (void $ string "#=") $ do
-    close <- blockTagDelim (void $ optional_ comment *> Megaparsec.newline)
+    close <- blockTagDelim (void $ optional_ comment *> newlineOrEOF)
     literalBody close
 
 literalBody :: P () -> P Literal
@@ -197,7 +209,7 @@ literalBody end = annotateSource $ do
 literalLine :: P Text.Lazy.Text
 literalLine = do
     line <- takeWhileP (Just "literal text") $ \ch -> ch /= '\r' && ch /= '\n'
-    Megaparsec.newline
+    newlineOrEOF
     pure $ Text.Lazy.fromStrict line
 
 blockTagDelim :: P () -> P (P ())
@@ -252,13 +264,13 @@ paragraphInline = (paragraphSpacer $> Break) <|> inline
 paragraphSpacer :: P ()
 paragraphSpacer = try $ do
     skipSpaces1
-    notFollowedBy $ void (string "##") <|> void Megaparsec.newline
+    notFollowedBy $ void (string "##") <|> newlineOrEOF
 
 tagParagraph :: P (Maybe (NonEmpty Series Inline))
 tagParagraph = between start end $ option Nothing paragraphLike
   where
-    start = char '{' *> skipSpaces *> optional_ endOfLine
-    end   = skipSpaces *> char '}'
+    start = char '{' *> skipSpaces *> emptyLines
+    end   = skipSpaces *> emptyLines *> char '}'
 
 -------------------------------------------------------------------------------
 genericTag :: P () -> P a -> P (Tagged a)
@@ -348,7 +360,7 @@ text = do
 textSpace :: P ()
 textSpace = try $ do
     skipSpaces1
-    notFollowedBy $ void (char '#') <|> void Megaparsec.newline
+    notFollowedBy $ void (char '#') <|> newlineOrEOF
 
 word :: P Text.Lazy.Text
 word = fmap fold . some $ choice
@@ -363,13 +375,27 @@ word = fmap fold . some $ choice
 comment :: P ()
 comment = label "comment" $ do
     void $ string "##"
-    void $ skipManyTill anySingle (lookAhead Megaparsec.newline)
+    void $ skipManyTill anySingle (lookAhead newlineOrEOF)
 
 endOfLine :: P ()
-endOfLine = do
-    optional_ comment
-    void Megaparsec.newline
-    skipSpaces
+endOfLine =
+    -- This rule is a bit hairy! Specifically, there was a bug at the end of 
+    -- a file that ended with a comment and no trailing newline.
+    --
+    -- Because we use `endOfLine` in repeat productions (many, some),
+    -- endOfLine _has_ to consume input to prevent looping forever.
+    -- In order to satisfy this:
+    -- 
+    -- 1. If its the end of a file, then we _must_ consume a comment.
+    -- 2. If it's not the end of a file, then we _must_ consume at least 
+    --    one newline.
+    commentThenNewline <|> commentThenEOF
+  where
+     commentThenEOF     = comment <* eof
+     commentThenNewline = try $ do
+        optional_ comment
+        void Megaparsec.newline
+        skipSpaces
 
 endOfLines :: P ()
 endOfLines = skipSome endOfLine
@@ -379,7 +405,7 @@ emptyLines = skipMany endOfLine
 
 spaceChar :: P ()
 spaceChar = do
-    notFollowedBy Megaparsec.newline
+    notFollowedBy newlineOrEOF
     void Megaparsec.spaceChar
 
 skipSpaces :: P ()
@@ -390,6 +416,9 @@ skipSpaces1 = skipSome spaceChar
 
 token :: P a -> P a
 token = (<* skipSpaces)
+
+newlineOrEOF :: P ()
+newlineOrEOF = void Megaparsec.newline <|> eof
 
 -------------------------------------------------------------------------------
 optional_ :: P a -> P ()

@@ -3,5 +3,6 @@
 dist/
 dist-newstyle/
 /cabal.project.local
-/_out/
+/.out/
+/.prosidy-manual/
 *~

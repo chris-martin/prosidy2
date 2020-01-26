@@ -37,12 +37,12 @@ newtype Manual a = Manual (ManualR -> ManualS -> (Either ManualError a, ManualS)
 instance MonadFail Manual where
     fail = failWith . Fail
 
-runManual :: Manual a -> FilePath -> TableOfContents -> Either ManualError a
-runManual (Manual f) fp toc
+runManual :: Manual a -> TableOfContents -> Either ManualError a
+runManual (Manual f) toc
     | HashSet.null undef = result
     | otherwise          = result *> Left (UndefinedReferences undef)
   where
-    (result, st) = f (ManualR fp 0 toc) emptyState
+    (result, st) = f (ManualR 0 toc) emptyState
     undef        = HashSet.difference (references st) (definitions st)
 
 parameters :: Manual ManualR
@@ -63,8 +63,7 @@ failWith :: ManualError -> Manual a
 failWith e = Manual $ \_ state -> (Left e, state)
 
 data ManualR = ManualR
-  { currentPath     :: FilePath
-  , currentDepth    :: Natural
+  { currentDepth    :: Natural
   , tableOfContents :: TableOfContents
   }
 
@@ -94,7 +93,7 @@ define :: Text -> Manual Slug
 define lemma = do
     state <- getState
     let defs      = definitions state
-        lemmaSlug = slug lemma
+        lemmaSlug = slug 0 lemma
     if HashSet.member lemmaSlug defs
         then failWith $ DuplicateDefinitions lemma
         else setState state { definitions = HashSet.insert lemmaSlug defs }
@@ -102,7 +101,7 @@ define lemma = do
 
 reference :: Text -> Manual Slug
 reference lemma = do
-    let lemmaSlug = slug lemma
+    let lemmaSlug = slug 0 lemma
     state <- getState
     setState state { references = HashSet.insert lemmaSlug (references state) }
     pure lemmaSlug

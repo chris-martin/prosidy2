@@ -1,0 +1,317 @@
+{
+    "content": [
+        {
+            "value": {
+                "content": [],
+                "name": "tag",
+                "metadata": {
+                    "settings": {},
+                    "properties": []
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [],
+                "name": "tag",
+                "metadata": {
+                    "settings": {},
+                    "properties": []
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [],
+                "name": "tag",
+                "metadata": {
+                    "settings": {},
+                    "properties": []
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [],
+                "name": "tag",
+                "metadata": {
+                    "settings": {
+                        "setting": ""
+                    },
+                    "properties": [
+                        "prop"
+                    ]
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [],
+                "name": "tag",
+                "metadata": {
+                    "settings": {
+                        "setting": ""
+                    },
+                    "properties": [
+                        "prop"
+                    ]
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [],
+                "name": "tag",
+                "metadata": {
+                    "settings": {
+                        "setting": ""
+                    },
+                    "properties": [
+                        "prop"
+                    ]
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [],
+                "name": "tag",
+                "metadata": {
+                    "settings": {
+                        "setting": "foo"
+                    },
+                    "properties": [
+                        "prop"
+                    ]
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [
+                    {
+                        "value": [
+                            {
+                                "value": "Inner contents",
+                                "type": "text"
+                            }
+                        ],
+                        "type": "paragraph"
+                    },
+                    {
+                        "value": [
+                            {
+                                "value": "Another paragraph",
+                                "type": "text"
+                            }
+                        ],
+                        "type": "paragraph"
+                    }
+                ],
+                "name": "tag",
+                "metadata": {
+                    "settings": {
+                        "setting": "foo"
+                    },
+                    "properties": [
+                        "prop"
+                    ]
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [
+                    {
+                        "value": [
+                            {
+                                "value": "Inner contents",
+                                "type": "text"
+                            }
+                        ],
+                        "type": "paragraph"
+                    },
+                    {
+                        "value": [
+                            {
+                                "value": "Another paragraph",
+                                "type": "text"
+                            }
+                        ],
+                        "type": "paragraph"
+                    }
+                ],
+                "name": "tag",
+                "metadata": {
+                    "settings": {
+                        "setting": "foo"
+                    },
+                    "properties": [
+                        "prop"
+                    ]
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": {
+                "content": [
+                    {
+                        "value": [
+                            {
+                                "value": "Inner contents",
+                                "type": "text"
+                            }
+                        ],
+                        "type": "paragraph"
+                    }
+                ],
+                "name": "tag",
+                "metadata": {
+                    "settings": {
+                        "setting": "foo"
+                    },
+                    "properties": [
+                        "prop"
+                    ]
+                }
+            },
+            "subtype": "block",
+            "type": "tag"
+        },
+        {
+            "value": [
+                {
+                    "value": "Blah blah",
+                    "type": "text"
+                },
+                {
+                    "value": [],
+                    "type": "break"
+                },
+                {
+                    "value": "blah blah.",
+                    "type": "text"
+                },
+                {
+                    "value": [],
+                    "type": "break"
+                },
+                {
+                    "value": {
+                        "content": [],
+                        "name": "inline",
+                        "metadata": {
+                            "settings": {
+                                "setting": "foo"
+                            },
+                            "properties": [
+                                "prop"
+                            ]
+                        }
+                    },
+                    "subtype": "inline",
+                    "type": "tag"
+                },
+                {
+                    "value": [],
+                    "type": "break"
+                },
+                {
+                    "value": {
+                        "content": [
+                            {
+                                "value": "look ma",
+                                "type": "text"
+                            }
+                        ],
+                        "name": "inline",
+                        "metadata": {
+                            "settings": {
+                                "setting": "foo"
+                            },
+                            "properties": [
+                                "prop"
+                            ]
+                        }
+                    },
+                    "subtype": "inline",
+                    "type": "tag"
+                },
+                {
+                    "value": [],
+                    "type": "break"
+                },
+                {
+                    "value": {
+                        "content": [
+                            {
+                                "value": "no hands",
+                                "type": "text"
+                            }
+                        ],
+                        "name": "inline",
+                        "metadata": {
+                            "settings": {
+                                "setting": "foo"
+                            },
+                            "properties": [
+                                "prop"
+                            ]
+                        }
+                    },
+                    "subtype": "inline",
+                    "type": "tag"
+                },
+                {
+                    "value": [],
+                    "type": "break"
+                },
+                {
+                    "value": "content",
+                    "type": "text"
+                }
+            ],
+            "type": "paragraph"
+        },
+        {
+            "value": {
+                "content": "          ## This is _not_ a comment; it's part of the tag around it",
+                "name": "src",
+                "metadata": {
+                    "settings": {},
+                    "properties": []
+                }
+            },
+            "subtype": "literal",
+            "type": "tag"
+        }
+    ],
+    "metadata": {
+        "settings": {
+            "empty": "",
+            "case": "Comments",
+            "nonempty": "yes"
+        },
+        "properties": [
+            "prop"
+        ]
+    }
+}

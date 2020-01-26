@@ -34,10 +34,16 @@ although it may work without both.
 
 #-h{Changelog}
 #-h+{2020-01-24}
-Combined multiple Cabal projects into a super-Cabal file.
+#-list:
+  #-item{Combined multiple Cabal projects into a super-Cabal file.}
+#:
 
 #-h+{2020-01-19}
-Added source tags to all Prosidy elements meaning better errors!
+#-list:
+  #-item{Added source tags to all Prosidy elements meaning better errors!}
+#:
 
 #-h+{2020-01-03}
-Refactored the various Prosidy repositories into a single monorepo.
+#-list:
+  #-item{Refactored the various Prosidy repositories into a single monorepo.}
+#:

@@ -1,0 +1,37 @@
+{
+    "content": [
+        {
+            "value": [
+                {
+                    "value": "This is a paragraph ending in a Unix break.",
+                    "type": "text"
+                }
+            ],
+            "type": "paragraph"
+        },
+        {
+            "value": [
+                {
+                    "value": "This is a paragraph ending in a Windows break.",
+                    "type": "text"
+                }
+            ],
+            "type": "paragraph"
+        },
+        {
+            "value": [
+                {
+                    "value": "This is a paragraph ending in a classic Mac OS break.",
+                    "type": "text"
+                }
+            ],
+            "type": "paragraph"
+        }
+    ],
+    "metadata": {
+        "settings": {
+            "case": "Line breaks"
+        },
+        "properties": []
+    }
+}

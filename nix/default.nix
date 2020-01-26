@@ -23,6 +23,7 @@ let
 	        name = "prosidy-env";
 	        paths = [
                 pkgs.binutils.bintools
+                pkgs.fswatch
                 self.ghc
 	        ];
 	    };
@@ -39,9 +40,11 @@ let
             mmorph
             megaparsec
             optparse-applicative
+            shake
             tasty
             tasty-golden
             tasty-hunit
+            wai-app-static
         ]);
     };
 in

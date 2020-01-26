@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+source ./bin/mkenv
+
+mkdir -p .out/doc
+warp --docroot .out/doc --host 127.0.0.1 &
+trap "kill $!" EXIT
+
+fswatch --recursive --one-per-batch --event Created --event Updated ./doc |\
+while read -r event
+do
+    echo "Triggering update (event: ${event})" >&2
+    m v2-run prosidy-manual || true
+done

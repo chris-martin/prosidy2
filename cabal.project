@@ -1,3 +1,4 @@
 packages: prosidy.cabal
 
 optimization: True
+split-sections: True

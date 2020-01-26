@@ -2,6 +2,7 @@
 
 html {
     font: 16px/1.4 'PT Serif', Georgia, Times, Times New Roman, serif;
+    height: 100%;
 }
 
 body {
@@ -101,9 +102,12 @@ nav li
     top: 0;
 }
 
-nav > ol > li {
+nav > ol > li.current {
     font-weight: bold;
-    margin-bottom: 1em;
+}
+
+nav > ol > li {
+    margin: 0.5em 0;
 }
 
 nav > ol > li > ol {
@@ -112,9 +116,9 @@ nav > ol > li > ol {
 
 nav > ol > li > ol > li > ol {
     display: none;
-    border-right: 1px solid #2454C7;
-    padding-right: 0.5ch;
-    font-style: italic;
+    border-left: 1px solid #2454C7;
+    margin-left: 1ch;
+    padding-left: 1ch;
 }
 
 nav > ol > li > ol > li.viewing-child > ol,
@@ -167,12 +171,12 @@ aside p:first-child {
     font-weight: bold;
 }
 
-aside.note {
-    background-color: #d7dff4;
-    border-color: #2454C7;
+aside.info {
+    background-color: #d7f4ef;
+    border-color: #23C6A8;
 }
 
-aside.note::before {
+aside.info::before {
     background-image: url('info.svg');
 }
 
@@ -194,7 +198,6 @@ aside.wip::before {
     background-image: url('wip.svg');
 }
 
-
 .char-sequence-literal > span,
 .char-sequence-utf-8 > span {
     margin-left: 0.25ch;
@@ -202,11 +205,35 @@ aside.wip::before {
 
 /* footer */
 footer {
-    color: #444;
+    background-color: #444;
+    color: #ddd;
     font-size: 0.8em;
+    margin: 2rem -1rem -1rem;
+    min-height: 8em;
 
     text-align: center;
     padding: 2rem 0;
+}
+
+pre.source-code {
+    background-color: #fdf6e3;
+    border: 1px solid #eee8d5;
+    color: #839496; 
+}
+
+pre.source-code > code {
+    display: block;
+    padding: 0 1ch;
+    background-color: #fdf6e3;
+}
+
+pre.source-code::before {
+    content: "Source code";
+    background-color: #eee8d5;
+    color: #93a1a1;
+    display: block;
+    font-size: 0.8em;
+    padding: 0 1ch;
 }
 
 /* Special rules for tiny views */
@@ -240,26 +267,26 @@ footer {
 
     body {
         display: grid;
-        grid-template-columns: 1fr 15ch minmax(45ch, 70ch) 1fr;
-        grid-template-rows: max-content max-content min-content;
+        grid-template-columns: 1fr minmax(45ch, 70ch) 15ch 1fr;
+        grid-template-rows: max-content max-content auto;
         grid-column-gap: 4ch;
     }
 
     body > nav
     {
-        grid-column: 2;
+        grid-column: 3;
         grid-row: 2;
     }
     
     body > header,
     body > main
     {
-        grid-column: 3;
+        grid-column: 2;
     }
 
     body > footer {
         grid-row: 3;
-        grid-column: 2 / 4;
+        grid-column: 1 / 5;
     }
 
     aside {
@@ -280,7 +307,6 @@ footer {
     }
 
     nav {
-        text-align: right;
         opacity: 0.6;
         transition: 0.2s opacity;
     }

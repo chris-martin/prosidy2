@@ -1,18 +1,18 @@
 {
     "files.exclude": {
-        "_out/**": true,
+        ".out/**": true,
         "dist/**": true,
         "dist-newstyle/**": true,
         ".ghc.environment.*": true,
         ".gitattributes": true,
-        ".ghc/**": true
+        ".env/**": true
     },
     "files.watcherExclude": {
-        "_out/**": true,
+        "**/.out/**": true,
         "**/.git/objects/**": true,
         "**/.git/subtree-cache/**": true,
-        ".ghc/**": true,
-        "dist/**": true,
-        "dist-newstyle/**": true
+        "**/.env/**": true,
+        "**/dist/**": true,
+        "**/dist-newstyle/**": true
     }
 }

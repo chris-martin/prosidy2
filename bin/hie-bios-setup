@@ -1,8 +1,9 @@
 #!/bin/bash
 set -eu
 cd "$(git rev-parse --show-toplevel)"
-HIE_BIOS_OUTPUT="${HIE_BIOS_OUTPUT:-/dev/fd/1}"
 ./bin/mkenv
+
+HIE_BIOS_OUTPUT="${HIE_BIOS_OUTPUT:-/dev/fd/1}"
 
 function write
 {
@@ -11,9 +12,10 @@ function write
 
 if [ -L .env ] 2>&1
 then
+    dbpath="$(realpath "$(find -L .env/lib -type d -name package.conf.d)")"
     write <<EOF
 -clear-package-db
--package-db="$(realpath "$(find .env/lib -type d -name package.conf.d)")/"
+-package-db=$dbpath
 EOF
 else
     version="$(ghc --numeric-version)"

@@ -9,8 +9,10 @@ module Prosidy.Manual.Compile (compile, document) where
 import           Text.Blaze.Html5               ( (!) )
 import           Prosidy
 import           Prosidy.Manual.Monad
-import           Prosidy.Manual.Slug            ( slug )
+import           Prosidy.Manual.Slug            ( Slug(..), FileSlug(..), slug )
 import           Control.Lens.Operators
+import           System.FilePath ((-<.>), makeRelative, takeDirectory, takeBaseName)
+import Control.Applicative ((<|>))
 
 import qualified Prosidy.Manual.TableOfContents
                                                as TOC
@@ -24,21 +26,20 @@ import           Text.Blaze.Html.Renderer.Utf8  ( renderHtml )
 import qualified Prosidy.Compile               as C
 import qualified Data.ByteString.Lazy          as LBS
 import qualified Data.Text                     as Text
-import qualified Data.Char                     as Char
 import qualified Data.Map.Strict               as Map
 import           Numeric.Natural                ( Natural )
 import Control.Monad (unless)
+import qualified Data.Char as Char
 
 type Html a = C.Product a Manual H.Html
 
 compile
     :: Html a
     -> TOC.TableOfContents
-    -> FilePath
     -> a
     -> Either ManualError LBS.ByteString
-compile h contents fp input = do
-    result <- runManual (C.compileM h input) fp contents
+compile h contents input = do
+    result <- runManual (C.compileM h input) contents
     case result of
         Left  err -> Left $ CompileError err
         Right ok  -> Right $ renderHtml ok
@@ -92,7 +93,7 @@ document = mdo
         body    <- C.children blockRule
         tocHtml <- C.embed $ do
             params <- parameters
-            pure $ toc (currentPath params) (tableOfContents params)
+            pure $ toc (tableOfContents params)
 
         pure $ do
             let titleText = H.text title
@@ -108,18 +109,26 @@ document = mdo
                         foldMap (H.h2 . H.text) subtitle
                     H.nav tocHtml
                     H.main body
+                    H.footer $ do
+                        H.div "Copyright ©2020 James Alexander Feldman-Crough" ! HA.id "copyright"
 
 blockTag
     :: C.ProductRule Block Manual H.Html
     -> Html BlockTag
 blockTag blockRule = do
+    listRule <- list blockRule
+
     noteRule <-
         C.tag "note" "An aside, adding additional information to text." $ do
             level <- C.req @NoteLevel "level" "The 'severity' of the note."
             body  <- C.children blockRule
             pure $ H.aside body ! HA.class_ (H.toValue level)
 
-    listRule    <- list blockRule
+    specRule <-
+        C.tag "spec" "A part of the specification with test cases." $ do
+            _test <- C.reqText "test" "The name of the test."
+            body  <- C.children blockRule
+            pure body
 
     sectionRule <-
         C.tag "section" "A container which deliniates sections of a page." $ do
@@ -133,15 +142,14 @@ blockTag blockRule = do
             body <- C.children $ C.hoist nesting blockRule
             hTag <- C.embed headerTag
             pure $ do
-                let theSlug =
-                        slug $ title `fromMaybe` tocTitle `fromMaybe` slugText
+                let theSlug = slug 0 $ title `fromMaybe` tocTitle `fromMaybe` slugText
                 H.section ! HA.id (H.toValue theSlug) $ do
                     hTag $ H.text title
                     body
 
     C.oneOf "block tag"
             "A top-level block tag."
-            [noteRule, listRule, sectionRule]
+            [noteRule, listRule, sectionRule, specRule]
 
 inlineTag :: C.ProductRule Inline Manual H.Html -> Html InlineTag
 inlineTag inlineRule = do
@@ -163,12 +171,14 @@ inlineTag inlineRule = do
                 "Displays a sequence of characters alongside its Unicode hexadecimal \
         \representation."
             $ do
-                  rep  <- C.reqText "rep" "The literal sequence of characters."
-                  body <- C.children textOnly
+                  rep      <- C.reqText "rep" "The literal sequence of characters."
+                  noEscape <- C.prop "no-escape" "Do not escape special characters."
+                  body     <- C.children textOnly
                   pure $ do
-                      let escaped = Text.concatMap
-                              (\c -> Text.pack $ Char.showLitChar c [])
-                              rep
+                      let escaped | noEscape  = rep
+                                  | otherwise = Text.concatMap
+                                    (\c -> Text.pack $ Char.showLitChar c [])
+                                    rep
                           codepoints = Char.ord <$> Text.unpack rep
                       H.text body
                       " "
@@ -177,7 +187,9 @@ inlineTag inlineRule = do
                           " "
                           H.code ! HA.class_ "codepoints" $ do
                               "0x"
-                              for_ codepoints $ \point -> H.toHtml $ show point
+                              for_ codepoints $ \point -> 
+                                  H.span (H.toHtml $ hexadecimalize point) 
+                                    ! HA.class_ "word"
 
     defRule <- C.tag "def" "Defines a term." $ do
         _lemma        <- C.optText "lemma" "The dictionary-form of the term."
@@ -209,6 +221,11 @@ inlineTag inlineRule = do
                      "Literal text, inline with normal text."
                      (H.code <$> C.children inlineRule)
 
+    refRule <- C.tag "ref" "References a section in the same document." $ do
+        section <- C.reqText "section" "The title of the section to link to."
+        body <- C.children inlineRule
+        pure $ H.a body ! HA.href ("#" <> H.toValue (slug 0 section))
+
     termRule <-
         C.tag "term"
               "References a term defined elsewhere in the body with `def`."
@@ -233,11 +250,35 @@ inlineTag inlineRule = do
     C.oneOf
         "inline tag"
         "A top-level inline tag."
-        [boldRule, charsRule, defRule, italicRule, litRule, linkRule, termRule]
+        [boldRule, charsRule, defRule, italicRule, litRule, linkRule, refRule, termRule]
+
+hexadecimalize :: Int -> String
+hexadecimalize = go []
+  where
+    go []  0 = "0"
+    go acc 0 = acc
+    go acc n
+      | n >= 16   = let (q, r) = quotRem n 16 in go (go acc r) q
+      | n >= 10   = Char.chr (Char.ord 'A' + n - 10) : acc
+      | otherwise = show n ++ acc
 
 literalTag :: Html LiteralTag
 literalTag = do
-    C.oneOf "literal tag" "A top-level literal tag." []
+    codeRule <- C.literal "source code" "Source code literal" 
+        (pure . H.text)
+
+    srcRule <-
+        C.tag "src" "A block of source code." $ do
+            lang <- C.optText "lang" "The programming language of the source-code block."
+            body <- C.child codeRule
+            pure $ H.pre 
+                ! HA.class_ "source-code" 
+                ! foldMap (H.dataAttribute "language" . H.toValue) lang
+                $ H.code body
+
+    C.oneOf "literal tag" "A top-level literal tag." 
+        [ srcRule
+        ]
 
 list :: C.ProductRule Block Manual H.Html -> C.Sum BlockTag Manual H.Html
 list blockRule = do
@@ -263,32 +304,31 @@ list blockRule = do
         pure $ (if ordered then H.ol else H.ul) content
 
 
-toc :: FilePath -> TOC.TableOfContents -> H.Html
-toc currentPath (TOC.TableOfContents entries) =
-    H.ol . for_ (Map.toList entries) $ \(Slug.FileSlug _ path, entry) ->
-        tocItem (Just currentPath) 0 path entry
+toc :: TOC.TableOfContents -> H.Html
+toc theToc = H.ol $ do
+    foldMap (uncurry tocOther) before 
+    tocCurrent thisSlug Nothing thisContents
+    foldMap (uncurry tocOther) after 
+  where
+    (before, (thisSlug, thisContents), after) = TOC.orderedEntries theToc
 
-tocItem :: Maybe FilePath -> Natural -> FilePath -> TOC.Entry -> H.Html
-tocItem currentPath depth itemPath entry = do
-    let uri | null currentPath = H.toValue itemPath <> "#" <> itemSlug
-            | otherwise        = H.toValue itemPath
-        itemAttributes | currentPath == Just itemPath = HA.class_ "current"
-                       | otherwise                    = mempty
-        title    = H.text $ TOC.entryTitle entry
-        children = TOC.entryChildren entry
-        itemSlug = H.toValue (TOC.entrySlug entry)
-    H.li ! itemAttributes $ do
-        H.a title
-            ! HA.href uri
-            ! (if null currentPath
-                  then H.dataAttribute "target" itemSlug
-                  else mempty
-              )
-        unless (depth > 1 || null children) . H.ol . for_ children $ tocItem
-            Nothing
-            (succ depth)
-            itemPath
+tocCurrent :: FileSlug -> Maybe Slug -> TOC.TOCEntry -> H.Html
+tocCurrent fp slug tocEntry = H.li ! HA.class_ "current" $ do
+    H.a (H.text $ TOC.entryTitle tocEntry) 
+        ! foldMap (H.dataAttribute "target" . H.toValue) slug
+        ! HA.href (H.toValue (fileSlugPath fp) <> foldMap (("#" <>) . H.toValue) slug)
+    H.ol . for_ (TOC.toList $ TOC.entryChildren tocEntry) $ 
+        \(slug, children) -> tocCurrent fp (Just slug) children
 
+tocOther :: FileSlug -> Metadata -> H.Html
+tocOther fp md 
+  | md ^. property "hidden" = mempty
+  | otherwise               = H.li $ H.a title ! HA.href (H.toValue path)
+    where
+      path  = fileSlugPath fp
+      title = H.text . fromMaybe "Untitled" $ 
+        (md ^. setting "toc-title") <|> (md ^. setting "title")
+    
 -------------------------------------------------------------------------------
 style :: H.AttributeValue -> H.Html
 style uri = H.link ! HA.href uri ! HA.rel "stylesheet" ! HA.type_ "text/css"

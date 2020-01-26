@@ -1,14 +1,13 @@
 #!/bin/bash
 set -eu
 cd "$(git rev-parse --show-toplevel)"
-
-./bin/mkenv
+source ./bin/mkenv
 
 ghc_version="$(ghc --numeric-version)"
 
 cabal_opts=( 
     --offline
-    --builddir="$PWD/_out/cabal" 
+    --builddir="$PWD/.out/cabal" 
     --package-db=clear
     --package-db="$PWD/.env/lib/ghc-${ghc_version}/package.conf.d"
 )
@@ -18,7 +17,7 @@ then
     set - build all
 elif [[ "${1:-}" = *install ]]
 then
-    cabal_opts+=( --installdir="$PWD/_out/bin" )
+    cabal_opts+=( --installdir="$PWD/.out/bin" )
 fi
 
 if [ -n "${JENKINS_URL:-}" ]

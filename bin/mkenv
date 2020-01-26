@@ -1,16 +1,23 @@
 #!/bin/bash
-command -v nix >/dev/null 2>&1 || exit 0
+[ -z "${_MKENV:-}" ] || return 0
+command -v nix >/dev/null 2>&1 || return 0
+[ -n "${DIRENV_DIR:-}" ] || eval "$(direnv export bash)"
 
-export NIX_PATH="nixpkgs=$PWD/nix/nixpkgs.nix"
-nix_substituters=(
-    'https://cache.nixos.org' 
-    'https://static-haskell-nix.cachix.org'
-)
-nix_keys=(
-    'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY='
-    'static-haskell-nix.cachix.org-1:Q17HawmAwaM1/BfIxaEDKAxwTOyRVhPG5Ji9K3+FvUU=' 
-)
-nix-build ./nix/default.nix -A env \
-    --substituters "$nix_substituters" \
-    --trusted-public-keys "$nix_keys" \
-    --out-link .env
+function setup_nix
+{
+    local nix_substituters=(
+        'https://cache.nixos.org' 
+        'https://static-haskell-nix.cachix.org'
+    )
+    local nix_keys=(
+        'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY='
+        'static-haskell-nix.cachix.org-1:Q17HawmAwaM1/BfIxaEDKAxwTOyRVhPG5Ji9K3+FvUU=' 
+    )
+    nix-build ./nix/default.nix -A env \
+        --substituters "$nix_substituters" \
+        --trusted-public-keys "$nix_keys" \
+        --out-link .env
+}
+
+setup_nix
+export _MKENV=1

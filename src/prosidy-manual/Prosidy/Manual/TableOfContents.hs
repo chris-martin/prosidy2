@@ -1,102 +1,107 @@
-{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingStrategies #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
 module Prosidy.Manual.TableOfContents
     ( TableOfContents(..)
-    , Entry(..)
-    , insertEntry
-    , documentEntry
-    , foldlEntries
-    , foldrEntries
+    , TOCTree(..)
+    , TOCFiles(..)
+    , TOCEntry(..)
+    , orderedEntries
+    , tableOfContents
+    , toList
     )
 where
 
 import           Prosidy
 import           Prosidy.Manual.Slug
 
-import           Data.Text                      ( Text )
 import qualified Control.Lens                  as L
 import           Control.Lens.Operators
-import           Data.Maybe                     ( fromMaybe )
+import           Data.Maybe                     ( fromMaybe, catMaybes )
 import           Data.Binary                    ( Binary(..) )
-import           Data.Vector                    ( Vector )
-import qualified Data.Vector                   as Vector
 import           Data.Map.Strict                ( Map )
-import qualified Data.Text.Lens                as TL
 import qualified Data.Map.Strict               as Map
 import           GHC.Generics                   ( Generic )
 import           Data.Hashable                  ( Hashable(..) )
 import           Control.DeepSeq                ( NFData )
+import Control.Applicative ((<|>))
+import Data.Text.Lens (packed)
+import Data.Bifunctor (second)
+import Control.Exception (Exception)
+import Data.Text (Text)
 
-newtype TableOfContents = TableOfContents (Map FileSlug Entry)
+data TableOfContents = TableOfContents
+    { allPages    :: TOCFiles
+    , thisPage    :: FileSlug
+    , pageContent :: TOCEntry
+    }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (Binary, NFData, Hashable)
+
+newtype TOCFiles = TOCFiles (Map FileSlug Metadata)
   deriving stock (Show, Eq, Generic)
   deriving anyclass (Binary, NFData)
   deriving newtype (Semigroup, Monoid)
 
-instance Hashable TableOfContents where
-    hashWithSalt salt (TableOfContents xs) = Map.foldlWithKey'
-        (\x k v -> x `hashWithSalt` k `hashWithSalt` v)
-        salt
-        xs
+instance Hashable TOCFiles where
+    salt `hashWithSalt` TOCFiles tree =
+        Map.foldlWithKey' (\acc k v -> acc `hashWithSalt` k `hashWithSalt` v) 
+            salt tree
 
-data Entry = Entry
-    { entryTitle    :: Text
-    , entrySlug     :: Slug
-    , entryChildren :: Vector Entry
-    }
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (NFData)
+newtype TOCTree = TOCTree [(Slug, TOCEntry)]
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (Binary, NFData, Hashable)
+  deriving newtype (Semigroup, Monoid)
 
-instance Binary Entry where
-    get = Entry <$> get <*> get <*> fmap Vector.fromList get
+data TOCEntry = TOCEntry
+  { entryTitle    :: Text
+  , entryChildren :: TOCTree
+  }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (Binary, NFData, Hashable)
 
-    put (Entry t s xs) = do
-        put t
-        put s
-        put $ Vector.toList xs
+type Assoc a b = [(a, b)]
+type AssocItem a b = (a, b)
 
-instance Hashable Entry where
-    hashWithSalt salt (Entry title slug children) = Vector.foldl'
-        hashWithSalt
-        (salt `hashWithSalt` title `hashWithSalt` slug)
-        children
+tableOfContents :: TOCFiles -> FilePath -> Document -> Either TOCError TableOfContents
+tableOfContents tocFiles thisPath thisDoc = do
+    (fakeSlug, tree) <- case handleRegion $ thisDoc ^. regionOf of
+        Nothing -> Left $ NoTitle thisPath $ thisDoc ^. metadata
+        Just x  -> Right x
+    let slug = FileSlug (slugIndex fakeSlug) thisPath
+    pure $ TableOfContents tocFiles slug tree
 
-insertEntry :: FilePath -> Entry -> TableOfContents -> TableOfContents
-insertEntry fpath dEntry (TableOfContents toc) = TableOfContents toc'
+orderedEntries :: TableOfContents -> (Assoc FileSlug Metadata, AssocItem FileSlug TOCEntry, Assoc FileSlug Metadata)
+orderedEntries (TableOfContents (TOCFiles others) thisSlug thisContent) =
+    (before, (thisSlug, thisContent), after)
   where
-    dSlug = FileSlug (slugIndex $ entrySlug dEntry) fpath
-    toc'  = L.set (L.at dSlug) (Just dEntry) toc
+    (before, after) = 
+        second (dropWhile $ (== thisSlug) . fst)
+      . span ((< thisSlug) . fst) 
+      $ Map.toList others
 
-foldrEntries :: (Entry -> a -> a) -> a -> TableOfContents -> a
-foldrEntries f ini (TableOfContents toc) = Map.foldr f ini toc
+handleRegion :: Region (Series Block) -> Maybe (Slug, TOCEntry)
+handleRegion r = do
+    case (r ^. setting "toc-title" <|> r ^. setting "title") of
+        Nothing    -> Nothing
+        Just title ->
+          let thisPrio = priority r
+              thisSlug = slug thisPrio $ fromMaybe title (r ^. setting "slug")
+              children = r ^.. content . traverse . _BlockTag . _Tagged "section" . L.to handleRegion
+              subtree  = TOCTree $ catMaybes children
+          in Just (thisSlug, TOCEntry title subtree)
 
-foldlEntries :: (a -> Entry -> a) -> a -> TableOfContents -> a
-foldlEntries f ini (TableOfContents toc) = Map.foldl' f ini toc
+priority :: HasMetadata a => a -> Integer
+priority = fromMaybe 0 . L.preview (setting "priority" . L._Just . L.re packed . L._Show)
 
-documentEntry :: Document -> Entry
-documentEntry = regionToEntry . L.view regionOf
+toList :: TOCTree -> [(Slug, TOCEntry)]
+toList (TOCTree t) = t
 
-regionToEntry :: Region (Series Block) -> Entry
-regionToEntry region = Entry rTitle rSlug rChildren
-  where
-    rTitle = fromMaybe "<UNTITLED>" $ region ^? L.failing
-        (setting "toc-title" . L._Just)
-        (setting "title" . L._Just)
-    rIndex =
-        fromMaybe 0
-            $  region
-            ^? setting "priority"
-            .  L._Just
-            .  L.re TL.packed
-            .  L._Show
-    rSlug = (slug $ fromMaybe rTitle (region ^. setting "slug")) { slugIndex = rIndex
-                                                                 }
-    rChildren = Vector.fromList $ region ^.. entryFold
-
-entryFold :: L.Fold (Region (Series Block)) Entry
-entryFold = content . L.folded . allSections . L.to regionToEntry
-  where
-    allSections = L.deepOf (_BlockTag . content . L.folded)
-                           (_BlockTag . _Tagged "section")
+data TOCError =
+    NoTitle FilePath Metadata
+  deriving stock (Show, Eq)
+  deriving anyclass Exception

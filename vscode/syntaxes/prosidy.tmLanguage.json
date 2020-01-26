@@ -17,7 +17,7 @@
         { "include": "#block-tag" },
         { "include": "#literal-tag" },
         { "include": "#paragraph" },
-        { "include": "#invalid" }
+        { "include": "#comment" }
     ],
     "repository": {
         "assign": {
@@ -36,9 +36,9 @@
             },
             "name": "meta.tag.block.body.prosidy",
             "patterns": [
+                {"include": "#comment"},
                 { "include": "#block-tag" },
                 { "include": "#literal-tag" },
-                { "include": "#invalid" },
                 { "include": "#paragraph" }
             ]
         },
@@ -50,6 +50,7 @@
                 "2": {"name":"entity.name.tag.prosidy"}
             },
             "patterns": [
+                {"include": "#comment"},
                 {"include": "#metadata"},
                 {"include": "#block-body"},
                 {"include": "#inline-body"}
@@ -110,14 +111,11 @@
                 "2": {"name":"entity.name.tag.prosidy"}
             },
             "patterns": [
+                {"include": "#comment"},
                 {"include": "#metadata"},
                 {"include": "#inline-body"}
             ],
             "name": "meta.tag.inline.prosidy"
-        },
-        "invalid": {
-            "name": "invalid.illegal",
-            "match": "#"
         },
         "literal-tag": {
             "begin": "^\\s*(#=)([_[:alnum:]][^[:space:]\\\\#{}\\[\\]:=,]*)",
@@ -127,6 +125,7 @@
                 "2": {"name":"entity.name.tag.prosidy"}
             },
             "patterns": [
+                {"include": "#comment"},
                 {"include": "#metadata"},
                 {"include": "#literal-body"}
             ],
@@ -153,6 +152,7 @@
                 "1": { "name":"keyword.control.delimiter.prosidy" }
             },
             "patterns": [
+                {"include": "#comment"},
                 {"include": "#assign"},
                 {"include": "#key"},
                 {"include": "#separator"},

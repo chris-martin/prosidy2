@@ -1,9 +1,9 @@
 class CalculateViewing {
     constructor() {
         this.main = document.querySelector('main');
-        this.sections = document.querySelectorAll('main > section, main > section > section');
         this.currentLinks = document.querySelectorAll('nav > ol > li.current a')
         this.parents = document.querySelectorAll('nav > ol > li, nav > ol > li > ol > li')
+        this.sections = document.querySelectorAll('main > section, main > section > section')
         this.update();
         window.currentLinks = this.currentLinks
     }
@@ -11,7 +11,7 @@ class CalculateViewing {
 
     update() {
         if (!this.currentLinks) return;
-        const currentTop = window.scrollY
+        const currentTop = window.scrollY + window.innerHeight / 2;
         let viewing;
         for (const section of this.sections) {
             if (section.offsetTop > currentTop) break;

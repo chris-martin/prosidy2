@@ -1,1 +1,2 @@
-*.golden -text
+/data/golden/*/*.pro -text
+/data/golden/*/*.json -text
