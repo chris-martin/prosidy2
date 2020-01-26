@@ -11,7 +11,18 @@ function write
 if command -v nix >/dev/null 2>&1
 then
     export NIX_PATH="nixpkgs=$PWD/nix/nixpkgs.nix"
-    nix build --file nix --out-link .ghc ghc
+    nix_substituters=(
+        'https://cache.nixos.org' 
+        'https://static-haskell-nix.cachix.org'
+    )
+    nix_keys=(
+        'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY='
+        'static-haskell-nix.cachix.org-1:Q17HawmAwaM1/BfIxaEDKAxwTOyRVhPG5Ji9K3+FvUU=' 
+    )
+    nix-build ./nix/default.nix -A ghc \
+        --substituters "$nix_substituters" \
+        --trusted-public-keys "$nix_keys" \
+        --out-link .ghc
     write <<EOF
 -clear-package-db
 -package-db="$(realpath "$(find .ghc/lib -type d -name package.conf.d)")/"
@@ -29,6 +40,7 @@ write <<EOF
 -Wno-name-shadowing
 -i
 -ibuild
+-itest
 EOF
 
 for path in src/*

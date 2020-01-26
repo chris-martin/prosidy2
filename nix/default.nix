@@ -21,6 +21,8 @@ let
     rules = self: {
         ghc = haskellPackages.ghcWithPackages (hs: with hs; [
             aeson
+            aeson-diff
+            aeson-pretty
             blaze-html
             cabal-install
             generic-lens
@@ -29,30 +31,10 @@ let
             mmorph
             megaparsec
             optparse-applicative
+            tasty
+            tasty-golden
+            tasty-hunit
         ]);
-
-        m = pkgs.stdenv.mkDerivation {
-            name = "m";
-            version = "0.1";
-            srcs = ../build;
-            buildInputs = [ 
-                self.ghc 
-            ];
-            buildPhase = ''
-                ghc --make Build.hs -O -o m -main-is Build.main
-            '';
-            installPhase = ''
-                mkdir -p "$out/bin"
-                mv m "$out/bin/.m-unwrapped"
-                cat <<EOF > "$out/bin/m"
-                #!/bin/sh
-                export LOCALE_ARCHIVE='${pkgs.glibcLocales}/lib/locale/locale-archive'
-                export PATH="${self.ghc}/bin:\$PATH"
-                exec "$out/bin/.m-unwrapped" "\$@"
-                EOF
-                chmod +x "$out/bin/m"
-            '';
-        };
     };
 in
     pkgs.lib.fix rules
