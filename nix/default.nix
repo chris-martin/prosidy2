@@ -19,6 +19,14 @@ let
         };
 
     rules = self: {
+        env = pkgs.buildEnv {
+	        name = "prosidy-env";
+	        paths = [
+                pkgs.binutils.bintools
+                self.ghc
+	        ];
+	    };
+
         ghc = haskellPackages.ghcWithPackages (hs: with hs; [
             aeson
             aeson-diff

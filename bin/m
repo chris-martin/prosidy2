@@ -2,22 +2,7 @@
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 
-if command -v nix >/dev/null 2>&1
-then
-    export NIX_PATH="nixpkgs=$PWD/nix/nixpkgs.nix"
-    nix_substituters=(
-        'https://cache.nixos.org' 
-        'https://static-haskell-nix.cachix.org'
-    )
-    nix_keys=(
-        'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY='
-        'static-haskell-nix.cachix.org-1:Q17HawmAwaM1/BfIxaEDKAxwTOyRVhPG5Ji9K3+FvUU=' 
-    )
-    nix-build ./nix/default.nix -A ghc \
-        --substituters "$nix_substituters" \
-        --trusted-public-keys "$nix_keys" \
-        --out-link .ghc
-fi
+./bin/mkenv
 
 ghc_version="$(ghc --numeric-version)"
 
@@ -25,14 +10,15 @@ cabal_opts=(
     --offline
     --builddir="$PWD/_out/cabal" 
     --package-db=clear
-    --package-db="$PWD/.ghc/lib/ghc-${ghc_version}/package.conf.d"
+    --package-db="$PWD/.env/lib/ghc-${ghc_version}/package.conf.d"
 )
 
-if [[ "${1:-}" = *install ]]
+if [ "$#" -eq 0 ]
 then
-    cabal_opts+=(
-        --installdir="$PWD/_out/bin"
-    )
+    set - build all
+elif [[ "${1:-}" = *install ]]
+then
+    cabal_opts+=( --installdir="$PWD/_out/bin" )
 fi
 
 if [ -n "${JENKINS_URL:-}" ]
