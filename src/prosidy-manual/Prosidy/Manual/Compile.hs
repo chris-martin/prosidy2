@@ -51,7 +51,7 @@ document = mdo
                          literalTagRule
                          paragraphRule
 
-    blockTagRule <- blockTag blockRule paragraphRule
+    blockTagRule <- blockTag blockRule
 
     inlineRule   <- C.inline "inline"
                              "Top-level inline items."
@@ -75,27 +75,19 @@ document = mdo
     breakRule <- C.break "break" "Single spaces between lines." (pure " ")
 
     C.document $ do
-        title    <- C.reqText "title" "This manual page's title."
-        subtitle <- C.optText "subtitle" "This manual page's subtitle."
-        revision <- C.optText "revision"
-                              "The version of this page in the manual."
-        created <- C.optText
-            "created"
-            "The date this manual page was initially created."
-        updated <- C.optText "updated"
-                             "The date this manual page was last updated."
-        lang  <- C.optText "lang" "The language of this page."
-        noToc <- C.prop "no-toc"
-                        "Do not show the table of contents on this page."
+        title     <- C.reqText "title"    "This manual page's title."
+        subtitle  <- C.optText "subtitle" "This manual page's subtitle."
+        lang      <- C.optText "lang"     "The language of this page."
+        _revision <- C.optText "revision" "The version of this page in the manual."
+        _created  <- C.optText "created"  "The date this manual page was initially created."
+        _updated  <- C.optText "updated"  "The date this manual page was last updated."
+        _noToc    <- C.prop    "no-toc"   "Do not show the table of contents on this page."
 
-        _ <- C.optText "toc-title"
-                       "The title as it appears in the table of contents."
-        _ <- C.prop
-            "hidden"
-            "Hide this document from the table of contents entirely."
-        _ <- C.opt @Integer
-            "priority"
-            "The sort order in the table of contents. Higher goes first."
+        -- These options are used in the table-of-contents preprocessor,
+        -- but specifying them ensures that they're properly validated.
+        _ <- C.optText      "toc-title" "The title as it appears in the table of contents."
+        _ <- C.prop         "hidden"    "Hide this document from the table of contents entirely."
+        _ <- C.opt @Integer "priority"  "The sort order in the table of contents. Higher goes first."
 
         body    <- C.children blockRule
         tocHtml <- C.embed $ do
@@ -119,9 +111,8 @@ document = mdo
 
 blockTag
     :: C.ProductRule Block Manual H.Html
-    -> C.ProductRule Paragraph Manual H.Html
     -> Html BlockTag
-blockTag blockRule paragraphRule = do
+blockTag blockRule = do
     noteRule <-
         C.tag "note" "An aside, adding additional information to text." $ do
             level <- C.req @NoteLevel "level" "The 'severity' of the note."
