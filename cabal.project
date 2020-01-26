@@ -1,2 +1,3 @@
 packages: prosidy.cabal
-optimization: False
+
+optimization: True

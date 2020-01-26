@@ -18,6 +18,10 @@ source-repository head
   type:     git
   location: https://git.fldcr.com/prosidy
 
+flag fatal-warnings
+  description: Turns all warnings into errors. Used in CI.
+  default:     False
+  manual:      True
 
 -------------------------------------------------------------------------------
 common prosidy-shared
@@ -27,6 +31,9 @@ common prosidy-shared
     -Wall 
     -Wno-name-shadowing
 
+  if flag(fatal-warnings)
+    ghc-options:
+      -Werror
 
 -------------------------------------------------------------------------------
 library
@@ -80,7 +87,7 @@ library prosidyc
     , mtl                  ^>= 2.2
     , lens                 ^>= 4.18
     , mmorph               ^>= 1.1
-    , profunctors          ^>= 5.5
+    , profunctors           >= 5.3 && < 5.6
     , unordered-containers ^>= 0.2
 
 
@@ -148,7 +155,7 @@ library prosidy-internal
 
   build-depends:
       aeson            ^>= 1.4
-    , profunctors      ^>= 5.5
+    , profunctors       >= 5.3 && < 5.6
     , tagged           ^>= 0.8
     , text             ^>= 1.2
 
