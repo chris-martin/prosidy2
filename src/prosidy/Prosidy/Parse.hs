@@ -140,6 +140,8 @@ doc = do
 -------------------------------------------------------------------------------
 docMetadata :: P Metadata
 docMetadata = do
+    -- try to read a shebang as the _very_ first line of a document.
+    optional_ $ string "#!" *> skipManyTill anySingle (void newlineOrEOF)
     -- skip past any blank lines at the start of the document
     skipSpaces *> skipMany endOfLine
     -- read each metadata item as a line-wide token

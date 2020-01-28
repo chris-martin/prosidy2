@@ -1,0 +1,25 @@
+{
+    "content": [
+        {
+            "value": [
+                {
+                    "value": "This document has a shebang at the start.",
+                    "type": "text"
+                },
+                {
+                    "value": [],
+                    "type": "break"
+                },
+                {
+                    "value": "Make sure we can parse it.",
+                    "type": "text"
+                }
+            ],
+            "type": "paragraph"
+        }
+    ],
+    "metadata": {
+        "settings": {},
+        "properties": []
+    }
+}
