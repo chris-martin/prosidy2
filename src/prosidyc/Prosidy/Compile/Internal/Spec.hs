@@ -25,8 +25,7 @@ import           Prosidy.Compile.Internal.Error ( Result
 
 import           Data.Text                      ( Text )
 import           Data.HashMap.Strict            ( HashMap )
-import           Type.Reflection                ( Typeable
-                                                )
+import           Type.Reflection                ( Typeable )
 import           GHC.Generics                   ( Generic )
 import           Data.Hashable                  ( Hashable )
 import           Control.Monad.State            ( StateT(..)

@@ -5,10 +5,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
-module Prosidy.Markup
-    ( main
-    )
-where
+module Prosidy.Markup (main) where
 
 import           Prosidy
 import qualified Prosidy.Compile               as C
@@ -20,13 +17,13 @@ import           Control.Exception              ( throwIO
                                                 , bracket
                                                 )
 import           Text.Blaze.Html.Renderer.Utf8  ( renderHtml )
-import           Data.ByteString.Lazy                 ( toStrict )
+import           Data.ByteString.Lazy           ( toStrict )
 import           Text.Blaze.Html5               ( (!) )
 
 import qualified System.IO                     as IO
 import           Data.Foldable                  ( for_ )
-import qualified Data.ByteString as BS
-import Data.Text.Encoding (decodeUtf8)
+import qualified Data.ByteString               as BS
+import           Data.Text.Encoding             ( decodeUtf8 )
 
 import qualified Text.Blaze.Html5              as H
 import qualified Text.Blaze.Html5.Attributes   as A
@@ -40,7 +37,10 @@ import           Control.Exception              ( displayException )
 main :: IO ()
 main = do
     Opts {..} <- getOpts
-    input <- withFile' IO.stdin inputFile IO.ReadMode (fmap decodeUtf8 . BS.hGetContents)
+    input     <- withFile' IO.stdin
+                           inputFile
+                           IO.ReadMode
+                           (fmap decodeUtf8 . BS.hGetContents)
     document <- either throwIO pure
         $ parseDocument (fromMaybe "<stdin>" inputFile) input
     case

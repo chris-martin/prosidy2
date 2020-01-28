@@ -1,14 +1,7 @@
 {-# LANGUAGE DeriveAnyClass, DeriveGeneric, DerivingStrategies, GeneralisedNewtypeDeriving, OverloadedStrings #-}
-module Prosidy.Manual.Slug
-    ( Slug
-    , slug
-    , slugText
-    , slugIndex
-    , FileSlug(..)
-    )
-where
+module Prosidy.Manual.Slug (Slug, slug, slugText, slugIndex, FileSlug(..)) where
 
-import Prosidy
+import           Prosidy
 
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
@@ -27,11 +20,10 @@ data FileSlug = FileSlug
   deriving anyclass (Hashable, NFData)
 
 instance Ord FileSlug where
-    FileSlug ix0 p0 `compare` FileSlug ix1 p1 = 
-        case ix0 `compare` ix1 of
-            GT -> LT
-            LT -> GT
-            EQ -> p0 `compare` p1
+    FileSlug ix0 p0 `compare` FileSlug ix1 p1 = case ix0 `compare` ix1 of
+        GT -> LT
+        LT -> GT
+        EQ -> p0 `compare` p1
 
 instance Binary FileSlug where
     get = FileSlug <$> get <*> get

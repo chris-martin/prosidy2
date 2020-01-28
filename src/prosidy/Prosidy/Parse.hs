@@ -85,8 +85,9 @@ parseDocument path = runP doc . makeSource path
 readDocument :: FilePath -> IO Document
 readDocument filepath = do
     bytes <- ByteString.readFile filepath
-    either throwIO pure . parseDocument filepath $ 
-        Text.Encoding.decodeUtf8With (\_ _ -> Just '\65533') bytes
+    either throwIO pure . parseDocument filepath $ Text.Encoding.decodeUtf8With
+        (\_ _ -> Just '\65533')
+        bytes
 
 -------------------------------------------------------------------------------
 -- | Parses a Prosidy document's header 'Metadata' from source, stopping when the
@@ -389,10 +390,10 @@ endOfLine =
     -- 1. If its the end of a file, then we _must_ consume a comment.
     -- 2. If it's not the end of a file, then we _must_ consume at least 
     --    one newline.
-    commentThenNewline <|> commentThenEOF
+            commentThenNewline <|> commentThenEOF
   where
-     commentThenEOF     = comment <* eof
-     commentThenNewline = try $ do
+    commentThenEOF     = comment <* eof
+    commentThenNewline = try $ do
         optional_ comment
         void Megaparsec.newline
         skipSpaces

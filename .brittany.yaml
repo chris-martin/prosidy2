@@ -29,7 +29,7 @@ conf_layout:
   lconfig_altChooser:
     tag: AltChooserBoundedSearch
     contents: 3
-  lconfig_allowSingleLineExportList: false
+  lconfig_allowSingleLineExportList: true
   lconfig_importColumn: 50
   lconfig_hangingTypeSignature: false
   lconfig_importAsColumn: 50

@@ -16,7 +16,7 @@ module Prosidy.Compile.Internal.Compile where
 
 import qualified Prosidy                       as P
 
-import Prosidy.Internal.Optics (Affine')
+import           Prosidy.Internal.Optics        ( Affine' )
 import qualified Prosidy.Compile.Internal.Error
                                                as Error
 import qualified Prosidy.Compile.Internal.Eval as Eval
@@ -28,8 +28,7 @@ import           Control.Monad.Trans            ( lift )
 import           Data.Foldable                  ( asum )
 import qualified Control.Lens                  as L
 import           Control.Lens.Operators
-import           Data.Generics.Product          ( field
-                                                )
+import           Data.Generics.Product          ( field )
 import           Data.Functor                   ( ($>) )
 import           Control.Monad.Morph            ( MFunctor(..) )
 import           Control.Monad.Reader           ( ask )

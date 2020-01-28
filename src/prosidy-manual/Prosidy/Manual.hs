@@ -11,56 +11,65 @@
 {-# LANGUAGE TypeFamilies #-}
 module Prosidy.Manual where
 
-import Development.Shake.Classes
-import Development.Shake ((%>), (<//>), (~>), (|%>))
-import qualified Development.Shake as Shake
-import Development.Shake.FilePath ((</>), (-<.>), makeRelative)
-import GHC.Generics (Generic)
-import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe)
-import Control.Exception (throwIO)
+import           Development.Shake.Classes
+import           Development.Shake              ( (%>)
+                                                , (<//>)
+                                                , (~>)
+                                                , (|%>)
+                                                )
+import qualified Development.Shake             as Shake
+import           Development.Shake.FilePath     ( (</>)
+                                                , (-<.>)
+                                                , makeRelative
+                                                )
+import           GHC.Generics                   ( Generic )
+import qualified Data.Map.Strict               as Map
+import           Data.Maybe                     ( fromMaybe )
+import           Control.Exception              ( throwIO )
 
-import Control.Lens.Operators
-import Data.Text.Lens (packed)
-import qualified Control.Lens as L
-import qualified Data.ByteString.Lazy as LBS
+import           Control.Lens.Operators
+import           Data.Text.Lens                 ( packed )
+import qualified Control.Lens                  as L
+import qualified Data.ByteString.Lazy          as LBS
 
-import Prosidy
-import Prosidy.Manual.Compile (compile, document)
-import Prosidy.Manual.Opts
-import Prosidy.Manual.Slug
-import Prosidy.Manual.TableOfContents
+import           Prosidy
+import           Prosidy.Manual.Compile         ( compile
+                                                , document
+                                                )
+import           Prosidy.Manual.Opts
+import           Prosidy.Manual.Slug
+import           Prosidy.Manual.TableOfContents
 
 main :: IO ()
 main = do
     opts <- getOpts
     Shake.shake (mainOpts opts) $ do
-        installOracles opts 
+        installOracles opts
         mainBuild opts
 
 mainOpts :: Opts -> Shake.ShakeOptions
-mainOpts Opts{dbDir, outDir} = Shake.shakeOptions
-    { Shake.shakeFiles = dbDir
-    , Shake.shakeThreads = 0
-    , Shake.shakeAbbreviations =
-        [ (outDir, "$OUTPUT")
-        ]
-    , Shake.shakeProgress = Shake.progressSimple
-    } 
+mainOpts Opts { dbDir, outDir } = Shake.shakeOptions
+    { Shake.shakeFiles         = dbDir
+    , Shake.shakeThreads       = 0
+    , Shake.shakeAbbreviations = [(outDir, "$OUTPUT")]
+    , Shake.shakeProgress      = Shake.progressSimple
+    }
 
 mainBuild :: Opts -> Shake.Rules ()
-mainBuild Opts{outDir, srcDir} = do
+mainBuild Opts { outDir, srcDir } = do
     Shake.want ["all"]
 
-    "all" ~> do   
+    "all" ~> do
         Shake.need ["manual", "resources"]
 
     "manual" ~> do
-        prosidySources  <- Shake.getDirectoryFiles srcDir ["//*.pro"]
+        prosidySources <- Shake.getDirectoryFiles srcDir ["//*.pro"]
         Shake.need $ fmap (\file -> outDir </> file -<.> "html") prosidySources
 
     "resources" ~> do
-        manualResources <- Shake.getDirectoryFiles srcDir ["//*.js", "//*.css", "//*.svg"]
+        manualResources <- Shake.getDirectoryFiles
+            srcDir
+            ["//*.js", "//*.css", "//*.svg"]
         Shake.need $ fmap (\file -> outDir </> file) manualResources
 
     outDir <//> "*.html" %> \path -> do
@@ -74,13 +83,14 @@ mainBuild Opts{outDir, srcDir} = do
             bytes <- either throwIO pure $ compile document toc doc
             LBS.writeFile path bytes
 
-    [outDir <//> "*.css", outDir <//> "*.js", outDir <//> "*.svg"] |%> \path -> do
-        Shake.putNormal $ "# Building " <> path
-        let src = srcDir </> makeRelative outDir path
-        Shake.copyFile' src path
+    [outDir <//> "*.css", outDir <//> "*.js", outDir <//> "*.svg"] |%> \path ->
+        do
+            Shake.putNormal $ "# Building " <> path
+            let src = srcDir </> makeRelative outDir path
+            Shake.copyFile' src path
 
 installOracles :: Opts -> Shake.Rules ()
-installOracles opts@Opts{srcDir} = do
+installOracles opts@Opts { srcDir } = do
     Shake.addOracleCache $ \(MetadataFor path) -> do
         Shake.need [path]
         Shake.putNormal $ "# Reading metadata for " <> show path
@@ -100,9 +110,15 @@ installOracles opts@Opts{srcDir} = do
     pure ()
 
 tocForFile :: Opts -> FilePath -> Shake.Action TOCFiles
-tocForFile Opts{srcDir} path = do
-    meta  <- Shake.askOracle . MetadataFor $ srcDir </> path
-    let thisPrio = fromMaybe 0 $ meta ^? setting "priority" . traverse . L.re packed . L._Show
+tocForFile Opts { srcDir } path = do
+    meta <- Shake.askOracle . MetadataFor $ srcDir </> path
+    let thisPrio =
+            fromMaybe 0
+                $  meta
+                ^? setting "priority"
+                .  traverse
+                .  L.re packed
+                .  L._Show
         thisSlug = FileSlug thisPrio (path -<.> "html")
     pure . TOCFiles $ Map.singleton thisSlug meta
 

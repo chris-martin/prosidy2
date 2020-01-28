@@ -138,7 +138,8 @@ instance Exception EvalError where
     displayException (WrappedEvalError key (Just loc) inner) =
         "While proccessing the contents of "
             <> displayInfoKey key
-            <> " at " <> prettySourceLocation loc
+            <> " at "
+            <> prettySourceLocation loc
             <> "\n\n"
             <> (let showLine nth line =
                           Text.justifyRight 4 ' ' (Text.pack $ show nth)
